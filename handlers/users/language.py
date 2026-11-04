@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import logging
+
 from aiogram import F, Router
+from aiogram.exceptions import TelegramNetworkError
 from aiogram.filters import Command, CommandObject
 from aiogram.types import CallbackQuery, Message
 
@@ -16,6 +19,7 @@ from services.runtime import get_runtime
 from .start import language_keyboard
 
 router = Router(name="language")
+logger = logging.getLogger(__name__)
 
 
 @router.message(Command("lang"))
@@ -58,6 +62,11 @@ async def choose_language(callback: CallbackQuery) -> None:
         return
 
     runtime.languages.set(callback.message.chat.id if callback.message else callback.from_user.id, value)
-    await callback.answer()
+    try:
+        await callback.answer()
+    except TelegramNetworkError:
+        # A failed spinner acknowledgement must not prevent the confirmation
+        # message; the language itself is already stored above.
+        logger.warning("could not acknowledge language callback", exc_info=True)
     if callback.message:
         await callback.message.answer(LANG_SET[value], parse_mode=None)
