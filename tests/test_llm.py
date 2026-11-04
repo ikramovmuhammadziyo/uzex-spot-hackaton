@@ -96,3 +96,24 @@ def test_authorization_header_and_configured_flag() -> None:
 
     unconfigured = make_client(api_key="")
     assert unconfigured.configured is False
+
+
+def test_payload_includes_tools_and_tool_choice() -> None:
+    client = make_client()
+    tools = [{"type": "function", "function": {"name": "run_sql"}}]
+    payload = client._build_payload([{"role": "user", "content": "hi"}], tools)
+    assert payload["model"] == "mock-model"
+    assert payload["tools"] == tools
+    assert payload["tool_choice"] == "auto"
+    assert "reasoning_effort" not in payload
+
+
+def test_payload_includes_reasoning_effort_when_configured() -> None:
+    client = LLMClient(
+        api_key="test-key",
+        base_url="http://localhost/v1",
+        model="gemini-3.8-flash",
+        reasoning_effort="LOW",
+    )
+    payload = client._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["reasoning_effort"] == "low"

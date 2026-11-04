@@ -95,6 +95,7 @@ All settings live in `.env` (see `.env.dist` for the full template).
 | `LLM_MAX_TOKENS` | no | `1600` | Maximum answer length |
 | `LLM_TIMEOUT_SECONDS` | no | `60` | Per-request LLM timeout |
 | `LLM_MAX_TOOL_ROUNDS` | no | `6` | Tool-calling iterations per question |
+| `LLM_REASONING_EFFORT` | no | empty | `low`/`medium`/`high`; Gemini 3.8 Flash: use `low` for speed |
 | `AGENT_TIMEOUT_SECONDS` | no | `75` | Whole-question budget (hackathon limit is 90 s) |
 | `MAX_HISTORY_TURNS` | no | `8` | Follow-up context messages kept per chat |
 | `HISTORY_TTL_SECONDS` | no | `1800` | Context expires after 30 minutes |
@@ -109,6 +110,7 @@ The client only needs an OpenAI-compatible API with tool calling.
 | Provider | `LLM_BASE_URL` | Example `LLM_MODEL` |
 |---|---|---|
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini`, `gpt-4.1-mini` |
+| Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` (set `LLM_REASONING_EFFORT=low`) |
 | OpenRouter | `https://openrouter.ai/api/v1` | `openai/gpt-4o-mini`, `anthropic/claude-3.5-sonnet` |
 | DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
 | Groq | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |

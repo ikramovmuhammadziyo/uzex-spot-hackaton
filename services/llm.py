@@ -79,6 +79,7 @@ class LLMClient:
         timeout: float = config.LLM_TIMEOUT_SECONDS,
         max_retries: int = config.LLM_MAX_RETRIES,
         extra_headers: dict[str, str] | None = None,
+        reasoning_effort: str = config.LLM_REASONING_EFFORT,
     ) -> None:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
@@ -87,6 +88,7 @@ class LLMClient:
         self.max_tokens = max_tokens
         self.timeout = timeout
         self.max_retries = max(0, max_retries)
+        self.reasoning_effort = (reasoning_effort or "").strip().lower()
         self._client: httpx.AsyncClient | None = None
 
         headers = {
@@ -121,6 +123,30 @@ class LLMClient:
         if client is not None:
             await client.aclose()
 
+    def _build_payload(
+        self,
+        messages: list[dict[str, Any]],
+        tools: list[dict[str, Any]] | None = None,
+        temperature: float | None = None,
+        max_tokens: int | None = None,
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "model": self.model,
+            "messages": messages,
+            "temperature": self.temperature if temperature is None else temperature,
+            "max_tokens": self.max_tokens if max_tokens is None else max_tokens,
+            "stream": False,
+        }
+        if self.reasoning_effort:
+            # Gemini 3.8 Flash maps this to its thinking level. Other
+            # OpenAI-compatible providers may ignore or reject it, so it is
+            # opt-in through LLM_REASONING_EFFORT.
+            payload["reasoning_effort"] = self.reasoning_effort
+        if tools:
+            payload["tools"] = tools
+            payload["tool_choice"] = "auto"
+        return payload
+
     async def chat(
         self,
         messages: list[dict[str, Any]],
@@ -132,16 +158,7 @@ class LLMClient:
         if not self.configured:
             raise LLMError("LLM_API_KEY is not configured")
 
-        payload: dict[str, Any] = {
-            "model": self.model,
-            "messages": messages,
-            "temperature": self.temperature if temperature is None else temperature,
-            "max_tokens": self.max_tokens if max_tokens is None else max_tokens,
-            "stream": False,
-        }
-        if tools:
-            payload["tools"] = tools
-            payload["tool_choice"] = "auto"
+        payload = self._build_payload(messages, tools, temperature, max_tokens)
 
         url = f"{self.base_url}/chat/completions"
         last_error: Exception | None = None

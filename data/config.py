@@ -81,6 +81,9 @@ LLM_TIMEOUT_SECONDS = _as_float("LLM_TIMEOUT_SECONDS", 60.0)
 LLM_MAX_RETRIES = _as_int("LLM_MAX_RETRIES", 2)
 LLM_MAX_TOOL_ROUNDS = _as_int("LLM_MAX_TOOL_ROUNDS", 6)
 LLM_EXTRA_HEADERS = os.getenv("LLM_EXTRA_HEADERS", "").strip()
+# Optional OpenAI-style reasoning effort (low/medium/high). Gemini 3.8 Flash
+# uses medium by default; "low" keeps tool-calling answers fast.
+LLM_REASONING_EFFORT = os.getenv("LLM_REASONING_EFFORT", "").strip().lower()
 
 # ---------------------------------------------------------------------------
 # Bot behaviour
