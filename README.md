@@ -8,6 +8,14 @@
 Barcha ma’lumotlar o‘ylab topilgan: kompaniyalar, STIR, brokerlar, shartnomalar, bitimlar, narxlar va dollar kursi.
 Format tovar-xomashyo birjasining ochiq bitimlar reyestrini takrorlaydi. Haqiqiy tashkilotlar bilan o‘xshashlik tasodifiy.
 
+## Telegram-бот / Telegram bot
+
+Бот-аналитик по этому реестру: отвечает на вопросы по-русски и по-узбекски, все числа берёт из DuckDB и при
+отсутствии данных говорит об этом прямо. Запуск и настройка — в [BOT_README.md](BOT_README.md).
+
+Ushbu reyestr bo‘yicha analitik bot: rus va o‘zbek tillarida javob beradi, barcha raqamlarni DuckDB dan oladi,
+ma’lumot bo‘lmasa buni ochiq aytadi. Ishga tushirish va sozlash — [BOT_README.md](BOT_README.md).
+
 ## Русский
 
 ### Файлы

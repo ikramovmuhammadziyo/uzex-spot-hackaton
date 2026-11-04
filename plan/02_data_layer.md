@@ -7,7 +7,7 @@
 | `contracts.csv` | 6,616 | Contract cards (product, attributes, currency, terms, seller) |
 | `participants.csv` | 14,392 | Companies (sellers & buyers) |
 | `brokers.csv` | 120 | Broker offices |
-| `usd_rates.csv` | 1,766 | Daily USD→UZS rate |
+| `usd_rates.csv` | 1,765 | Daily USD→UZS rate (01.01.2022–31.10.2026) |
 
 ## Parsing pitfalls (verified by inspection)
 1. **Thousands separators**: `131 895 492` — spaces inside numbers, sometimes inside quoted fields. Must strip spaces before casting to numeric.
@@ -27,11 +27,11 @@ deal_date      DATE      -- Дата сделки
 deal_time      TIME      -- Время сделки
 auction_type   TEXT      -- Английский | Обратный | Двусторонний аукцион
 quantity       INTEGER   -- Количество (лоты)
-deal_sum       DOUBLE    -- Сумма сделки (в валюте контракта)
-start_price    DOUBLE    -- Стартовая цена за единицу
+deal_sum       DECIMAL(28,6) -- Сумма сделки (в валюте контракта)
+start_price    DECIMAL(28,6) -- Стартовая цена за единицу
 contract_no    INTEGER   -- → contracts.contract_no
 product_name   TEXT      -- Наименование товара (как в реестре)
-lot            DOUBLE    -- Лот
+lot            DECIMAL(20,6) -- Лот
 unit           TEXT      -- Единица измерения
 region         TEXT      -- Регион склада продавца
 contract_type  TEXT      -- Внутренний | Экспортный
@@ -43,13 +43,13 @@ seller_broker  TEXT      -- → brokers.code
 buyer_broker   TEXT      -- → brokers.code
 payment_date   DATE NULL
 delivery_date  DATE NULL
-delivered      DOUBLE NULL  -- Поставлено (лоты)
+delivered      DECIMAL(20,6) NULL -- Поставлено (лоты)
 ```
 
 ### contracts
 contract_no, product_name, brand, size, grade, type, class, tnved_code,
 product_group, product_category, industry, unit, lot, currency (UZS|USD),
-base_price, deposit_pct, delivery_basis, region, warehouse_address,
+currency_raw, base_price, deposit_pct, delivery_basis, region, warehouse_address,
 auction_type, contract_type, contract_form, payment_days, delivery_days,
 packaging, seller_inn, reg_date, valid_until
 
@@ -90,7 +90,7 @@ seller_name / buyer_name / broker names              -- через JOINs
 > When ambiguous, state the assumption in the answer.
 
 ## Implementation steps
-1. `scripts/load_data.py` — pandas/DuckDB ingest with cleaning, output `uzex.duckdb`.
+1. `scripts/load_data.py` — DuckDB ingest with cleaning, output `data/uzex.duckdb`.
 2. Validate: row counts per year must equal README (84,299 / 93,985 / 106,647 / 115,763 / 99,306 = 500,000).
 3. Create `deals_enriched` view with joins + computed fields.
 4. Sanity queries: min/max dates, distinct currencies, states distribution, INN join coverage.
