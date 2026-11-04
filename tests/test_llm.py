@@ -10,6 +10,7 @@ def make_client(api_key: str = "test-key") -> LLMClient:
         api_key=api_key,
         base_url="http://localhost:9999/v1",
         model="mock-model",
+        reasoning_effort="",
     )
 
 
