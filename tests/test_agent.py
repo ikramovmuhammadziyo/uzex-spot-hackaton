@@ -150,3 +150,27 @@ async def test_lookup_only_answer_names_lookup_tables(database) -> None:
     assert answer.no_answer is False
     assert answer.tables == ["brokers", "participants"]
     assert "Основание" in answer.text
+
+
+class FailingTools:
+    async def run(self, name: str, arguments: dict) -> str:
+        return json.dumps(
+            {"ok": False, "tool": name, "error": "invalid value 999999"}
+        )
+
+
+async def test_failed_tool_result_is_not_evidence(database) -> None:
+    llm = FakeLLM(
+        [
+            tool_call("run_sql", {"query": "SELECT broken"}),
+            final("📊 Всего 999 999 сделок.\n\nОснование: deals; строк: 1."),
+            final("В данных реестра ответа на этот вопрос нет."),
+        ]
+    )
+    agent = Agent(database, llm, tools=FailingTools())
+
+    answer = await agent.answer("Сколько всего сделок?", "ru")
+
+    assert answer.regenerated is True
+    assert answer.no_answer is True
+    assert answer.text == "В данных реестра ответа на этот вопрос нет."

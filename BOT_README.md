@@ -164,6 +164,7 @@ python -m pytest -q
 - `tests/test_guardrails.py` — number/date/name verification and no-answer logic.
 - `tests/test_tools.py` — SQL safety, real-DB queries, fuzzy product/company search.
 - `tests/test_language.py` — RU/UZ detection.
+- `tests/test_llm.py` — OpenAI-compatible response/tool-call parsing.
 - `tests/test_agent.py` — fake-LLM tool loop, forced tools, regeneration.
 - `tests/test_questions.md` — ground-truth question bank (RU/UZ) with SQL and
   expected values for manual regression.

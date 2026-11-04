@@ -218,12 +218,20 @@ class Agent:
                         if isinstance(query, str) and query.strip():
                             state.sql_queries.append(query.strip())
                             state.tables.update(_extract_tables(query))
-                            # Dates in filters are legitimate context; numeric
-                            # literals are not treated as evidence.
-                            state.evidence.add(query, numbers=False, dates=True, names=False)
+                            # Date filters are added to the evidence only after
+                            # the query succeeds (see below).
 
-                    state.evidence.add(result)
-                    _collect_result_stats(state, name, result)
+                    recognized = _collect_result_stats(state, name, result)
+                    if recognized:
+                        # Failed queries must not make their numbers/names
+                        # acceptable in the final answer.
+                        state.evidence.add(result)
+                        if name == "run_sql" and isinstance(arguments, dict):
+                            query = arguments.get("query")
+                            if isinstance(query, str) and query.strip():
+                                state.evidence.add(
+                                    query, numbers=False, dates=True, names=False
+                                )
                     state.messages.append(
                         {
                             "role": "tool",
@@ -278,36 +286,40 @@ def _accumulate_usage(target: dict[str, int], usage: dict[str, Any]) -> None:
             continue
 
 
-def _collect_result_stats(state: RunState, name: str, result: str) -> None:
+def _collect_result_stats(state: RunState, name: str, result: str) -> bool:
+    """Record tool stats; return True when the tool result is trustworthy evidence."""
+
     try:
         payload = json.loads(result)
     except (TypeError, ValueError):
-        return
+        return False
     if not isinstance(payload, dict):
-        return
-    if payload.get("ok"):
-        state.successful_tools += 1
-        if name == "run_sql":
-            try:
-                state.rows += int(payload.get("row_count") or 0)
-            except (TypeError, ValueError):
-                pass
-        elif name in {"search_products", "search_company"}:
-            matches = payload.get("matches")
-            if isinstance(matches, list):
-                state.rows += len(matches)
-            if name == "search_products":
-                state.tables.update({"contracts", "deals"})
-            else:
-                state.tables.update({"participants", "brokers"})
-        elif name == "usd_rate":
-            state.tables.add("usd_rates")
-            if payload.get("found"):
-                state.rows += 1
-    else:
+        return False
+    if not payload.get("ok"):
         error = str(payload.get("error") or "")
         if "database error" in error.lower():
             state.database_errors += 1
+        return False
+
+    state.successful_tools += 1
+    if name == "run_sql":
+        try:
+            state.rows += int(payload.get("row_count") or 0)
+        except (TypeError, ValueError):
+            pass
+    elif name in {"search_products", "search_company"}:
+        matches = payload.get("matches")
+        if isinstance(matches, list):
+            state.rows += len(matches)
+        if name == "search_products":
+            state.tables.update({"contracts", "deals"})
+        else:
+            state.tables.update({"participants", "brokers"})
+    elif name == "usd_rate":
+        state.tables.add("usd_rates")
+        if payload.get("found"):
+            state.rows += 1
+    return True
 
 
 def _extract_tables(query: str) -> set[str]:

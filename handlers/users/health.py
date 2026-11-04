@@ -21,7 +21,11 @@ async def cmd_health(message: Message) -> None:
     runtime = get_runtime()
     language = runtime.languages.get(message.chat.id) or detect_language(message.text or "", RU)
 
-    if not config.ADMINS or message.from_user.id not in config.ADMINS:
+    if (
+        not config.ADMINS
+        or message.from_user is None
+        or message.from_user.id not in config.ADMINS
+    ):
         await message.answer(HEALTH_DENIED[language], parse_mode=None)
         return
 
