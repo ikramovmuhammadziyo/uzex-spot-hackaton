@@ -52,6 +52,38 @@ def test_parse_tool_call_response() -> None:
     assert response.usage["total_tokens"] == 3
 
 
+def test_preserves_gemini_thought_signature() -> None:
+    client = make_client()
+    signature = {"google": {"thought_signature": "opaque-signature"}}
+    response = client._parse_response(
+        {
+            "choices": [
+                {
+                    "message": {
+                        "role": "assistant",
+                        "content": "",
+                        "tool_calls": [
+                            {
+                                "id": "call_1",
+                                "type": "function",
+                                "function": {
+                                    "name": "run_sql",
+                                    "arguments": '{"query": "SELECT 1"}',
+                                },
+                                "extra_content": signature,
+                            }
+                        ],
+                    },
+                    "finish_reason": "tool_calls",
+                }
+            ]
+        }
+    )
+
+    assert response.tool_calls[0]["extra_content"] == signature
+    assert response.message["tool_calls"][0]["extra_content"] == signature
+
+
 def test_parse_list_content() -> None:
     client = make_client()
     response = client._parse_response(

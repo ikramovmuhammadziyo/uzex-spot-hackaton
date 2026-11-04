@@ -127,11 +127,16 @@ class Agent:
         regenerated = False
 
         if verification.needs_regeneration and not is_no_answer(draft):
+            logger.warning(
+                "regenerating answer; unsupported numbers=%s names=%s",
+                verification.unsupported_numbers,
+                verification.unsupported_names,
+            )
             regenerated = True
             state.messages.append({"role": "assistant", "content": draft})
             state.messages.append(
                 {
-                    "role": "system",
+                    "role": "user",
                     "content": correction_prompt(
                         language,
                         verification.unsupported_numbers,
@@ -248,7 +253,7 @@ class Agent:
                 state.empty_retry = True
                 state.messages.append(
                     {
-                        "role": "system",
+                        "role": "user",
                         "content": (
                             "Your response was empty. Either call a tool to obtain the data "
                             "or reply with the required no-answer sentence."
@@ -259,9 +264,10 @@ class Agent:
 
             if state.tool_calls == 0 and not is_no_answer(text) and not state.forced_tool_retry:
                 state.forced_tool_retry = True
+                state.messages.append({"role": "assistant", "content": text})
                 state.messages.append(
                     {
-                        "role": "system",
+                        "role": "user",
                         "content": (
                             "You answered without using any tool. You must verify the answer "
                             "with the available tools (SQL, product/company search, USD rate). "

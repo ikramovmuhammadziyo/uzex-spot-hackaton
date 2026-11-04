@@ -96,6 +96,8 @@ async def test_agent_replaces_hallucination_with_no_answer(database) -> None:
     assert answer.no_answer is True
     assert answer.text == "В данных реестра ответа на этот вопрос нет."
     assert len(llm.calls) == 3
+    assert llm.calls[2][-1]["role"] == "user"
+    assert llm.calls[2][-2]["role"] == "assistant"
 
 
 async def test_agent_forces_a_tool_call(database) -> None:

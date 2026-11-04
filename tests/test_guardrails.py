@@ -36,6 +36,21 @@ def test_date_is_normalised_for_comparison() -> None:
     assert result.ok, result
 
 
+def test_year_from_date_is_accepted() -> None:
+    evidence = make_evidence("2024-01-01")
+    answer = "📊 В 2024 году было 10 сделок.\n\nОснование: deals_enriched; строк: 1."
+    result = verify_answer(answer, evidence, "ru")
+    assert result.ok, result
+
+
+def test_year_not_in_evidence_is_rejected() -> None:
+    evidence = make_evidence("2024-01-01")
+    answer = "📊 В 2025 году было 10 сделок.\n\nОснование: deals_enriched; строк: 1."
+    result = verify_answer(answer, evidence, "ru")
+    assert not result.ok
+    assert "2025" in result.unsupported_numbers
+
+
 def test_hallucinated_number_is_rejected() -> None:
     evidence = make_evidence('{"rows": [{"n": 106647}]}')
     answer = "📊 Всего 106 648 сделок.\n\nОснование: deals_enriched; период 2024."

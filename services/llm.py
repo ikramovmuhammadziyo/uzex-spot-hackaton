@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import re
 import uuid
 from dataclasses import dataclass, field
 from typing import Any
@@ -174,11 +175,28 @@ class LLMClient:
                 raise LLMError(f"network error: {exc}") from exc
 
             if response.status_code in {429, 500, 502, 503, 504} and attempt < self.max_retries:
+                delay = None
                 retry_after = response.headers.get("retry-after")
-                try:
-                    delay = float(retry_after) if retry_after else 1.5 * (attempt + 1)
-                except ValueError:
+                if retry_after:
+                    try:
+                        delay = float(retry_after)
+                    except ValueError:
+                        delay = None
+                if delay is None:
+                    # Google returns the wait inside the JSON body for 429s.
+                    match = re.search(
+                        r"retry in\s+([\d.]+)\s*s",
+                        response.text,
+                        re.IGNORECASE,
+                    )
+                    if match:
+                        try:
+                            delay = float(match.group(1))
+                        except ValueError:
+                            delay = None
+                if delay is None:
                     delay = 1.5 * (attempt + 1)
+                delay = min(max(delay, 0.5), 20.0)
                 logger.warning(
                     "LLM HTTP %s, retrying in %.1fs (attempt %s/%s)",
                     response.status_code,
@@ -186,7 +204,7 @@ class LLMClient:
                     attempt + 1,
                     self.max_retries,
                 )
-                await asyncio.sleep(min(delay, 10.0))
+                await asyncio.sleep(delay)
                 continue
 
             if response.status_code >= 400:
@@ -236,16 +254,20 @@ class LLMClient:
                     arguments = json.dumps(arguments, ensure_ascii=False)
                 if arguments is None:
                     arguments = "{}"
-                tool_calls.append(
-                    {
-                        "id": str(call.get("id") or f"call_{index}_{uuid.uuid4().hex[:8]}"),
-                        "type": "function",
-                        "function": {
-                            "name": name,
-                            "arguments": str(arguments),
-                        },
-                    }
-                )
+                tool_call: dict[str, Any] = {
+                    "id": str(call.get("id") or f"call_{index}_{uuid.uuid4().hex[:8]}"),
+                    "type": "function",
+                    "function": {
+                        "name": name,
+                        "arguments": str(arguments),
+                    },
+                }
+                # Gemini 3 returns a thought signature on every function call
+                # and rejects the next turn if it is not echoed back verbatim.
+                extra_content = call.get("extra_content")
+                if isinstance(extra_content, dict) and extra_content:
+                    tool_call["extra_content"] = extra_content
+                tool_calls.append(tool_call)
 
         usage = data.get("usage") or {}
         response = LLMResponse(

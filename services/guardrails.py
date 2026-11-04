@@ -218,6 +218,9 @@ class EvidenceIndex:
             if candidate.kind == "date":
                 if not dates:
                     continue
+                # A tool result containing 2024-01-01 also supports the year
+                # 2024, which the answer normally repeats from the question.
+                self._variants.add(candidate.raw[-4:])
             elif candidate.kind in {"number", "code"}:
                 if not numbers:
                     continue
