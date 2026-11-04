@@ -1,0 +1,1370 @@
+{
+ "run_at": "2026-11-05T00:49:26",
+ "model": "claude-haiku-5-5",
+ "base_url": "https://api.anthropic.com/v1",
+ "cases": [
+  {
+   "id": "01",
+   "title": "Экспорт 2025 и конвертация по курсу дня сделки",
+   "question": "Оцените экспортный сегмент биржи за 2025 год: сколько экспортных сделок, какова их сумма в долларах, сколько это в сумах, какую долю оборота 2025 года это составляет и какой эффективный курс сум/доллар из этого следует? Затем покажите, что получится, если пересчитать весь сегмент по курсу 12 552,58 на 31.12.2025 — какова ошибка в сумах и в процентах?",
+   "anchors": [
+    "Q1_2025_export_n",
+    "Q1_2025_export_usd",
+    "Q1_2025_export_uzs",
+    "Q1_share_value_pct",
+    "Q1_eff_rate",
+    "Q1_at_ye_rate",
+    "Q1_error_vs_ye",
+    "Q1_error_pct"
+   ],
+   "ok": true,
+   "text": "📊 Экспортный сегмент за 2025 год: 1270 сделок на сумму 203892531.64 USD, или 2533979960438.60 сум. Эффективный курс 12428.02 сум/USD.\n\n- **Доля в обороте 2025 года:** 4.87% от оборота 2025 года 52060836360057.12 сум (без аннулированных сделок).\n- **Пересчёт по курсу 12552.58 (курс на 31.12.2025):** 2559377314813.63 сум. Ошибка +25397354375.03 сум, или +1.0% к фактической сумме в сумах. Курс 31.12.2025 выше эффективного курса года, поэтому пересчёт завышает сумму.\n- **Фильтры:** сделки 2025 года с contract_type = «Экспортный», исключены 97 сделок «Аннулирован(Не оплачен)» (всего экспортных за 2025 год 1367). Все 1270 строк в USD; сумма в сумах по курсу на дату каждой сделки.\n\nОснование: deals_enriched, usd_rate (2025-12-31 = 12552.58 UZS за 1 USD); фильтры: 2025 год, Экспортный, USD, без состояния «Аннулирован(Не оплачен)»; строк: 1270.",
+   "sql": [
+    "WITH base AS (\n  SELECT * FROM deals_enriched\n  WHERE deal_date >= DATE '2025-01-01' AND deal_date < DATE '2026-01-01'\n    AND deal_state <> 'Аннулирован(Не оплачен)'\n)\nSELECT\n  (SELECT COUNT(*) FROM deals_enriched WHERE contract_type='Экспортный' AND deal_date >= DATE '2025-01-01' AND deal_date < DATE '2026-01-01') AS export_rows_all,\n  (SELECT COUNT(*) FROM base WHERE contract_type='Экспортный') AS export_rows_nocancel,\n  (SELECT COUNT(*) FROM base WHERE contract_type='Экспортный' AND currency='USD') AS export_usd_rows,\n  (SELECT COUNT(*) FROM base WHERE contract_type='Экспортный' AND currency<>'USD') AS export_nonusd_rows,\n  (SELECT SUM(deal_sum) FROM base WHERE contract_type='Экспортный' AND currency='USD') AS export_usd_sum,\n  (SELECT SUM(sum_uzs) FROM base WHERE contract_type='Экспортный' AND currency='USD') AS export_usd_sum_uzs,\n  (SELECT SUM(sum_uzs) FROM base) AS total_turnover_uzs_2025,\n  (SELECT SUM(sum_uzs) FROM base WHERE contract_type='Экспортный') AS export_total_uzs_all_currencies,\n  (SELECT COUNT(*) FROM deals_enriched WHERE contract_type='Экспортный' AND deal_date >= DATE '2025-01-01' AND deal_date < DATE '2026-01-01' AND deal_state='Аннулирован(Не оплачен)') AS export_cancelled",
+    "WITH base AS (\n  SELECT * FROM deals_enriched\n  WHERE deal_date >= DATE '2025-01-01' AND deal_date < DATE '2026-01-01'\n    AND deal_state <> 'Аннулирован(Не оплачен)'\n),\nexp AS (SELECT * FROM base WHERE contract_type='Экспортный' AND currency='USD')\nSELECT\n  SUM(deal_sum) AS usd_sum,\n  SUM(sum_uzs) AS uzs_sum,\n  100.0 * SUM(sum_uzs) / NULLIF((SELECT SUM(sum_uzs) FROM base),0) AS share_pct,\n  SUM(sum_uzs) / NULLIF(SUM(deal_sum),0) AS effective_rate,\n  SUM(deal_sum) * 12552.58 AS recalc_uzs,\n  SUM(deal_sum) * 12552.58 - SUM(sum_uzs) AS error_uzs,\n  100.0 * (SUM(deal_sum) * 12552.58 - SUM(sum_uzs)) / NULLIF(SUM(sum_uzs),0) AS error_pct,\n  COUNT(*) AS n\nFROM exp",
+    "WITH base AS (\n  SELECT * FROM deals_enriched\n  WHERE deal_date >= DATE '2025-01-01' AND deal_date < DATE '2026-01-01'\n    AND deal_state <> 'Аннулирован(Не оплачен)'\n),\nexp AS (SELECT * FROM base WHERE contract_type='Экспортный' AND currency='USD')\nSELECT\n  COUNT(*) AS n,\n  ROUND(SUM(deal_sum), 2) AS usd_sum,\n  ROUND(SUM(sum_uzs), 2) AS uzs_sum,\n  ROUND((SELECT SUM(sum_uzs) FROM base), 2) AS total_turnover_uzs,\n  ROUND(100.0 * SUM(sum_uzs) / NULLIF((SELECT SUM(sum_uzs) FROM base),0), 2) AS share_pct,\n  ROUND(SUM(sum_uzs) / NULLIF(SUM(deal_sum),0), 2) AS effective_rate,\n  ROUND(SUM(deal_sum) * 12552.58, 2) AS recalc_uzs,\n  ROUND(SUM(deal_sum) * 12552.58 - SUM(sum_uzs), 2) AS error_uzs,\n  ROUND(100.0 * (SUM(deal_sum) * 12552.58 - SUM(sum_uzs)) / NULLIF(SUM(sum_uzs),0), 2) AS error_pct\nFROM exp"
+   ],
+   "tables": [
+    "deals_enriched",
+    "usd_rates"
+   ],
+   "tool_calls": 5,
+   "rows": 5,
+   "usage": {
+    "prompt_tokens": 38711,
+    "completion_tokens": 3755,
+    "total_tokens": 42466
+   },
+   "latency": 17.2,
+   "model": "claude-haiku-5-5",
+   "guardrail_ok": true,
+   "regenerated": true,
+   "no_answer": false,
+   "guardrail_notes": [
+    "regenerating answer; unsupported numbers=['2 533 979 960 438,60', '12 428,02', '52 060 836 360 057,12', '2 559 377 314 813,63', '25 397 354 375,03', '4,87', '31.12'] names=[]"
+   ],
+   "scored": [
+    {
+     "anchor": "Q1_2025_export_n",
+     "expected": 1367,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q1_2025_export_usd",
+     "expected": 220524617.85,
+     "unit": "USD",
+     "tol": 100,
+     "matched": false
+    },
+    {
+     "anchor": "Q1_2025_export_uzs",
+     "expected": 2740766106533.96,
+     "unit": "UZS",
+     "tol": 50000000.0,
+     "matched": false
+    },
+    {
+     "anchor": "Q1_share_value_pct",
+     "expected": 4.8963,
+     "unit": "%",
+     "tol": 0.02,
+     "matched": true
+    },
+    {
+     "anchor": "Q1_eff_rate",
+     "expected": 12428.3907,
+     "unit": "UZS/USD",
+     "tol": 0.5,
+     "matched": true
+    },
+    {
+     "anchor": "Q1_at_ye_rate",
+     "expected": 2768152907531.55,
+     "unit": "UZS",
+     "tol": 50000000.0,
+     "matched": false
+    },
+    {
+     "anchor": "Q1_error_vs_ye",
+     "expected": 27386800997.6,
+     "unit": "UZS",
+     "tol": 5000000.0,
+     "matched": false
+    },
+    {
+     "anchor": "Q1_error_pct",
+     "expected": 0.9992,
+     "unit": "%",
+     "tol": 0.01,
+     "matched": true
+    }
+   ],
+   "matched": 4,
+   "total": 8
+  },
+  {
+   "id": "02",
+   "title": "Механизмы торгов 2024: отклонение цены от стартовой",
+   "question": "Только за 2024 год сравните три механизма торгов. По каждому (Английский аукцион, Двусторонний аукцион, Обратный аукцион) дайте число сделок, среднее и медианное отклонение фактической цены за единицу от стартовой в процентах, наблюдавшийся диапазон, сколько сделок закрылось ровно по стартовой цене и совокупную премию или дисконт в сумах. Затем назовите чистый эффект механизма торгов на оборот 2024 года.",
+   "anchors": [
+    "Q2_eng_n",
+    "Q2_eng_avg",
+    "Q2_eng_med",
+    "Q2_eng_max",
+    "Q2_eng_at_start",
+    "Q2_eng_prem_bn",
+    "Q2_dbl_n",
+    "Q2_dbl_avg",
+    "Q2_dbl_med",
+    "Q2_dbl_at_start",
+    "Q2_dbl_prem_bn",
+    "Q2_rev_n",
+    "Q2_rev_avg",
+    "Q2_rev_med",
+    "Q2_rev_min",
+    "Q2_rev_at_start",
+    "Q2_rev_prem_bn",
+    "Q2_net_prem_bn",
+    "Q2_net_pct"
+   ],
+   "ok": true,
+   "text": "📊 За 2024 год все три механизма вместе дали чистую премию **+251 719 545 506,69 сум** к стартовым ценам. Основной вклад дал английский аукцион, двусторонний и обратный его снижали.\n\nСравнение по завершённым сделкам (Исполнен и Исполнен(Частично)), отклонение считается как (факт за ед. − старт) / старт:\n\n| Механизм | Сделок | Среднее откл., % | Медиана откл., % | Диапазон откл., % | Ровно по старту | Премия (+) / дисконт (−), сум |\n|---|---|---|---|---|---|---|\n| Английский аукцион | 51 198 | 3,2351 | 1,3036 | от −0,0 до 40,0006 | 17 604 | +617 901 224 570,12 |\n| Двусторонний аукцион | 45 750 | −1,5023 | −1,5035 | от −3,0578 до 0,0 | 1 | −347 331 269 151,43 |\n| Обратный аукцион | 2 376 | −5,7757 | −4,1481 | от −35,0001 до −0,0046 | 0 | −18 850 409 912,00 |\n\n- Всего за 2024 год: 99 324 завершённых сделки, оборот 42 724 135 079 483,66 сум. Отменённые сделки («Аннулирован(Не оплачен)») исключены.\n- Чистый эффект механизма на оборот: 617 901 224 570,12 − 347 331 269 151,43 − 18 850 409 912,00 = **+251 719 545 506,69 сум**.\n- Для долларовых контрактов премия пересчитана в сумы по курсу на дату сделки.\n\nОснование: deals_enriched; фильтры: deal_date в 2024 году, deal_state IN ('Исполнен', 'Исполнен(Частично)'), группировка по auction_type; строк: 99 324 (3 группы).",
+   "sql": [
+    "WITH d AS (\n  SELECT auction_type, deal_no, deal_sum, start_price, volume, unit_price, currency, usd_rate, sum_uzs,\n         (unit_price - start_price) / NULLIF(start_price, 0) * 100 AS dev_pct,\n         (deal_sum - start_price * volume) * CASE WHEN currency = 'USD' THEN usd_rate ELSE 1 END AS prem_uzs\n  FROM deals_enriched\n  WHERE deal_date >= DATE '2024-01-01' AND deal_date < DATE '2025-01-01'\n    AND deal_state IN ('Исполнен', 'Исполнен(Частично)')\n)\nSELECT auction_type,\n       COUNT(*) AS deals,\n       COUNT(dev_pct) AS deals_with_dev,\n       ROUND(AVG(dev_pct), 4) AS avg_dev_pct,\n       ROUND(median(dev_pct), 4) AS median_dev_pct,\n       ROUND(MIN(dev_pct), 4) AS min_dev_pct,\n       ROUND(MAX(dev_pct), 4) AS max_dev_pct,\n       SUM(CASE WHEN unit_price = start_price THEN 1 ELSE 0 END) AS at_start_price,\n       ROUND(SUM(prem_uzs), 2) AS premium_uzs,\n       ROUND(SUM(sum_uzs), 2) AS turnover_uzs\nFROM d\nGROUP BY auction_type\nORDER BY auction_type",
+    "SELECT COUNT(*) AS rows_completed_2024, ROUND(SUM(sum_uzs),2) AS total_turnover_uzs,\n       ROUND(SUM((deal_sum - start_price * volume) * CASE WHEN currency = 'USD' THEN usd_rate ELSE 1 END),2) AS total_premium_uzs,\n       SUM(CASE WHEN start_price IS NULL OR start_price = 0 THEN 1 ELSE 0 END) AS zero_start\nFROM deals_enriched\nWHERE deal_date >= DATE '2024-01-01' AND deal_date < DATE '2025-01-01'\n  AND deal_state IN ('Исполнен', 'Исполнен(Частично)')"
+   ],
+   "tables": [
+    "deals_enriched"
+   ],
+   "tool_calls": 2,
+   "rows": 4,
+   "usage": {
+    "prompt_tokens": 13520,
+    "completion_tokens": 2800,
+    "total_tokens": 16320
+   },
+   "latency": 12.04,
+   "model": "claude-haiku-5-5",
+   "guardrail_ok": true,
+   "regenerated": false,
+   "no_answer": false,
+   "guardrail_notes": [],
+   "scored": [
+    {
+     "anchor": "Q2_eng_n",
+     "expected": 55076,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q2_eng_avg",
+     "expected": 3.243,
+     "unit": "%",
+     "tol": 0.005,
+     "matched": true
+    },
+    {
+     "anchor": "Q2_eng_med",
+     "expected": 1.3038,
+     "unit": "%",
+     "tol": 0.005,
+     "matched": true
+    },
+    {
+     "anchor": "Q2_eng_max",
+     "expected": 40.0006,
+     "unit": "%",
+     "tol": 0.005,
+     "matched": true
+    },
+    {
+     "anchor": "Q2_eng_at_start",
+     "expected": 19398,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q2_eng_prem_bn",
+     "expected": 665.0,
+     "unit": "bn UZS",
+     "tol": 2.0,
+     "matched": false
+    },
+    {
+     "anchor": "Q2_dbl_n",
+     "expected": 49004,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q2_dbl_avg",
+     "expected": -1.502,
+     "unit": "%",
+     "tol": 0.005,
+     "matched": false
+    },
+    {
+     "anchor": "Q2_dbl_med",
+     "expected": -1.5032,
+     "unit": "%",
+     "tol": 0.005,
+     "matched": false
+    },
+    {
+     "anchor": "Q2_dbl_at_start",
+     "expected": 1,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q2_dbl_prem_bn",
+     "expected": -372.4,
+     "unit": "bn UZS",
+     "tol": 2.0,
+     "matched": false
+    },
+    {
+     "anchor": "Q2_rev_n",
+     "expected": 2567,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q2_rev_avg",
+     "expected": -5.7439,
+     "unit": "%",
+     "tol": 0.005,
+     "matched": false
+    },
+    {
+     "anchor": "Q2_rev_med",
+     "expected": -4.1195,
+     "unit": "%",
+     "tol": 0.005,
+     "matched": false
+    },
+    {
+     "anchor": "Q2_rev_min",
+     "expected": -35.0001,
+     "unit": "%",
+     "tol": 0.005,
+     "matched": false
+    },
+    {
+     "anchor": "Q2_rev_at_start",
+     "expected": 0,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q2_rev_prem_bn",
+     "expected": -20.4,
+     "unit": "bn UZS",
+     "tol": 2.0,
+     "matched": false
+    },
+    {
+     "anchor": "Q2_net_prem_bn",
+     "expected": 272.2,
+     "unit": "bn UZS",
+     "tol": 2.0,
+     "matched": false
+    },
+    {
+     "anchor": "Q2_net_pct",
+     "expected": 0.5926,
+     "unit": "%",
+     "tol": 0.01,
+     "matched": false
+    }
+   ],
+   "matched": 5,
+   "total": 19
+  },
+  {
+   "id": "03",
+   "title": "Восемь состояний сделок, аннулированные и залог",
+   "question": "Дайте полное распределение восьми состояний сделок: количество, доля сделок, стоимость в сумах и доля стоимости. Какая часть оборота не состоялась и какая её часть покрыта договорным залогом? Какие состояния могут существовать только потому, что выгрузка сделана 30.10.2026, и что это значит для сравнений год к году?",
+   "anchors": [
+    "Q3_done_n",
+    "Q3_done_pct_n",
+    "Q3_done_tln",
+    "Q3_done_pct_v",
+    "Q3_ann_n",
+    "Q3_ann_pct_n",
+    "Q3_ann_tln",
+    "Q3_ann_pct_v",
+    "Q3_part_n",
+    "Q3_part_tln",
+    "Q3_paid_n",
+    "Q3_signed_n",
+    "Q3_wait_n",
+    "Q3_new_n",
+    "Q3_unsigned_n",
+    "Q3_deposit_all_tln",
+    "Q3_deposit_ann_tln",
+    "Q3_deposit_ann_share"
+   ],
+   "ok": true,
+   "text": "📊 Не состоялось 6,70% оборота: аннулировано 6,68% и не подписано 0,02%. Залогом покрыто 10,44% аннулированной суммы, или 0,70% всего оборота.\n\n**Распределение по состояниям** (весь реестр, 500 000 сделок, 220 477 157 554 431,79 сум):\n\n| Состояние | Сделок | Доля сделок, % | Сумма, сум | Доля суммы, % |\n|---|---|---|---|---|\n| Исполнен | 431 061 | 86,21 | 188 316 122 065 583,73 | 85,41 |\n| Аннулирован(Не оплачен) | 33 719 | 6,74 | 14 738 418 674 737,60 | 6,68 |\n| Исполнен(Частично) | 22 648 | 4,53 | 9 704 776 474 564,31 | 4,40 |\n| Оплачен | 5 854 | 1,17 | 3 328 004 059 810,92 | 1,51 |\n| Заключен | 3 954 | 0,79 | 2 808 734 470 546,67 | 1,27 |\n| Ждёт оплату | 1 714 | 0,34 | 943 157 232 261,47 | 0,43 |\n| Новый | 964 | 0,19 | 598 201 858 441,85 | 0,27 |\n| Не подписан | 86 | 0,02 | 39 742 718 485,24 | 0,02 |\n\n**Залог:** залог рассчитан как сумма сделки × `deposit_pct` договора (от 10% до 20%). В данных нет фактических платежей залога, поэтому это расчётная оценка. Залог по аннулированным сделкам составляет 1 538 095 229 303,44 сум.\n\n**Незавершённые состояния:** «Оплачен», «Заключен», «Ждёт оплату» и «Новый» в сумме дают 7 678 097 621 060,90 сум (3,48% оборота). Их исход ещё не известен.\n\n**Что зависит от даты выгрузки (30.10.2026):**\n- Состояния «Новый», «Заключен», «Ждёт оплату», «Оплачен» и «Не подписан» встречаются только в 2026 году. Они переходные: по мере оплаты и поставки часть сделок станет «Исполнен» или «Аннулирован».\n- Сравнивать 2026 год с предыдущими годами по доле исполненных или аннулированных сделок пока нельзя. Незавершённые сделки занижают долю «Исполнен» и могут изменить долю аннулирований. Для честного сравнения берите закрытые периоды (2022–2025) или сравнивайте 2026 год только по сделкам, которые уже получили финальное состояние.\n- Сделки «Новый» заключены в последний день выгрузки (30.10.2026), поэтому их доля в 2026 году почти полностью отражает незавершённость снимка, а не поведение рынка.\n\nОснование: deals_enriched, contracts (deposit_pct); фильтры: все состояния, без исключений; для залога — только «Аннулирован(Не оплачен)»; строк: 500 000 (сделок по состояниям), 33 719 (аннулированных с расчётом залога).",
+   "sql": [
+    "SELECT deal_state, COUNT(*) AS deals, ROUND(100.0*COUNT(*)/SUM(COUNT(*)) OVER (),2) AS deal_share_pct, ROUND(SUM(sum_uzs),2) AS sum_uzs_total, ROUND(100.0*SUM(sum_uzs)/SUM(SUM(sum_uzs)) OVER (),2) AS value_share_pct, MIN(deal_date) AS first_date, MAX(deal_date) AS last_date FROM deals_enriched GROUP BY deal_state ORDER BY deals DESC",
+    "SELECT COUNT(*) AS rows_cancelled, ROUND(SUM(d.sum_uzs),2) AS cancelled_uzs, ROUND(SUM(d.sum_uzs * c.deposit_pct / 100.0),2) AS deposit_cover_uzs, ROUND(SUM(CASE WHEN c.deposit_pct IS NULL THEN 1 ELSE 0 END),0) AS no_deposit_rows, MIN(c.deposit_pct) AS min_pct, MAX(c.deposit_pct) AS max_pct FROM deals_enriched d LEFT JOIN contracts c ON c.contract_no = d.contract_no WHERE d.deal_state = 'Аннулирован(Не оплачен)'",
+    "WITH t AS (SELECT SUM(sum_uzs) AS total_uzs, SUM(CASE WHEN deal_state='Аннулирован(Не оплачен)' THEN sum_uzs END) AS canc_uzs, SUM(CASE WHEN deal_state IN ('Аннулирован(Не оплачен)','Не подписан') THEN sum_uzs END) AS not_happened_uzs, SUM(CASE WHEN deal_state IN ('Новый','Заключен','Ждёт оплату','Оплачен') THEN sum_uzs END) AS open_uzs FROM deals_enriched), dep AS (SELECT SUM(d.sum_uzs*c.deposit_pct/100.0) AS dep_uzs FROM deals_enriched d JOIN contracts c ON c.contract_no=d.contract_no WHERE d.deal_state='Аннулирован(Не оплачен)') SELECT ROUND(t.total_uzs,2) total_uzs, ROUND(100.0*t.canc_uzs/t.total_uzs,2) canc_share_pct, ROUND(100.0*t.not_happened_uzs/t.total_uzs,2) not_happened_share_pct, ROUND(100.0*dep.dep_uzs/t.canc_uzs,2) deposit_share_of_cancelled_pct, ROUND(100.0*dep.dep_uzs/t.total_uzs,2) deposit_share_of_total_pct, ROUND(t.open_uzs,2) open_uzs, ROUND(100.0*t.open_uzs/t.total_uzs,2) open_share_pct, ROUND(dep.dep_uzs,2) dep_uzs FROM t, dep",
+    "SELECT EXTRACT(YEAR FROM deal_date) AS yr, deal_state, COUNT(*) AS deals FROM deals_enriched WHERE deal_state IN ('Новый','Заключен','Ждёт оплату','Оплачен','Не подписан') GROUP BY 1,2 ORDER BY 1,2"
+   ],
+   "tables": [
+    "contracts",
+    "deals_enriched"
+   ],
+   "tool_calls": 4,
+   "rows": 15,
+   "usage": {
+    "prompt_tokens": 30763,
+    "completion_tokens": 4232,
+    "total_tokens": 34995
+   },
+   "latency": 19.84,
+   "model": "claude-haiku-5-5",
+   "guardrail_ok": true,
+   "regenerated": false,
+   "no_answer": false,
+   "guardrail_notes": [],
+   "scored": [
+    {
+     "anchor": "Q3_done_n",
+     "expected": 431061,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_done_pct_n",
+     "expected": 86.2122,
+     "unit": "%",
+     "tol": 0.01,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_done_tln",
+     "expected": 188.316,
+     "unit": "trln UZS",
+     "tol": 0.02,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_done_pct_v",
+     "expected": 85.413,
+     "unit": "%",
+     "tol": 0.02,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_ann_n",
+     "expected": 33719,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_ann_pct_n",
+     "expected": 6.7438,
+     "unit": "%",
+     "tol": 0.01,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_ann_tln",
+     "expected": 14.738,
+     "unit": "trln UZS",
+     "tol": 0.02,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_ann_pct_v",
+     "expected": 6.6848,
+     "unit": "%",
+     "tol": 0.02,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_part_n",
+     "expected": 22648,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_part_tln",
+     "expected": 9.705,
+     "unit": "trln UZS",
+     "tol": 0.02,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_paid_n",
+     "expected": 5854,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_signed_n",
+     "expected": 3954,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_wait_n",
+     "expected": 1714,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_new_n",
+     "expected": 964,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_unsigned_n",
+     "expected": 86,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_deposit_all_tln",
+     "expected": 23.545,
+     "unit": "trln UZS",
+     "tol": 0.02,
+     "matched": false
+    },
+    {
+     "anchor": "Q3_deposit_ann_tln",
+     "expected": 1.538,
+     "unit": "trln UZS",
+     "tol": 0.01,
+     "matched": true
+    },
+    {
+     "anchor": "Q3_deposit_ann_share",
+     "expected": 6.5326,
+     "unit": "%",
+     "tol": 0.02,
+     "matched": false
+    }
+   ],
+   "matched": 16,
+   "total": 18
+  },
+  {
+   "id": "04",
+   "title": "Частичная поставка: недопоставленный объём и стоимость",
+   "question": "Состояние «Исполнен(Частично)» означает, что покупатель оплатил, а товар поставлен лишь частично. Оцените этот хвост: сколько сделок, сколько лотов и сколько физических единиц не поставлено, сколько это стоит в сумах по цене сделки за единицу, каков совокупный коэффициент поставки, на какую категорию товара приходится основная часть и какая отдельная сделка даёт наибольший недопоставленный объём?",
+   "anchors": [
+    "Q4_deals",
+    "Q4_und_lots",
+    "Q4_und_vol",
+    "Q4_tln",
+    "Q4_fill_pct",
+    "Q4_agri_tln",
+    "Q4_max_und_lots"
+   ],
+   "ok": true,
+   "text": "📊 Недопоставлено 151 667 030 лотов, что в сумах составляет 3776779720260.1 UZS; совокупный коэффициент поставки 62.1%.\n\n- **Сделки:** 22 648 со состоянием «Исполнен(Частично)».\n- **Лоты:** заказано 400 225 071, поставлено 248 558 041, не поставлено 151 667 030.\n- **Единицы:** не поставлено 172 439 661 физических единиц. Единицы разных типов (кг, л, шт. и др.) сложены без пересчёта, поэтому это число условное.\n- **Стоимость:** 3776779720260.1 UZS. Расчёт: недопоставленный объём × цена сделки за единицу × курс USD на дату сделки (для UZS курс равен 1).\n- **Категории:** основная часть приходится на «Сельскохозяйственная продукция» — 1937572360573.03 UZS, 51.3% от суммы, 8 415 сделок. Далее «Продовольственные товары» (13.36%) и «Нефтепродукты» (11.81%).\n- **Крупнейшая сделка по недопоставке:** №373855 от 20.11.2024, «Хлопок-сырец (форвард) Сорт I сорт Класс I класс». Заказано 442 215, поставлено 139 839 лотов по 1 единице, не поставлено 302 376 единиц, на сумму 2667113555.52 UZS.\n\nОснование: deals_enriched; фильтр: deal_state = 'Исполнен(Частично)'; сделка №373855; строк: 22 648 (категории: 3 строки в выборке топ-3 из 8).",
+   "sql": [
+    "SELECT COUNT(*) AS deals,\n       SUM(quantity) AS lots_total,\n       SUM(delivered) AS lots_delivered,\n       SUM(quantity - delivered) AS lots_undelivered,\n       SUM((quantity - delivered) * lot) AS units_undelivered,\n       SUM(volume) AS units_total,\n       SUM(delivered * lot) AS units_delivered,\n       SUM((quantity - delivered) * lot * unit_price * sum_uzs / NULLIF(deal_sum, 0)) AS undelivered_uzs,\n       SUM(CASE WHEN delivered IS NULL THEN 1 ELSE 0 END) AS null_delivered,\n       SUM(CASE WHEN delivered > quantity THEN 1 ELSE 0 END) AS over_delivered,\n       COUNT(DISTINCT currency) AS currencies\nFROM deals_enriched\nWHERE deal_state = 'Исполнен(Частично)'",
+    "SELECT product_category,\n       COUNT(*) AS deals,\n       SUM((quantity - delivered) * lot) AS units_undelivered,\n       SUM((quantity - delivered) * lot * unit_price * sum_uzs / NULLIF(deal_sum, 0)) AS undelivered_uzs\nFROM deals_enriched\nWHERE deal_state = 'Исполнен(Частично)'\nGROUP BY product_category\nORDER BY undelivered_uzs DESC\nLIMIT 10",
+    "SELECT deal_no, deal_date, product_name, unit, quantity, delivered, lot,\n       (quantity - delivered) * lot AS units_undelivered,\n       (quantity - delivered) * lot * unit_price * sum_uzs / NULLIF(deal_sum, 0) AS undelivered_uzs,\n       currency\nFROM deals_enriched\nWHERE deal_state = 'Исполнен(Частично)'\nORDER BY (quantity - delivered) * lot DESC\nLIMIT 5",
+    "SELECT 'coef' AS metric,\n       100.0 * SUM(delivered) / NULLIF(SUM(quantity), 0) AS value,\n       NULL AS unit_grp\nFROM deals_enriched WHERE deal_state = 'Исполнен(Частично)'\nUNION ALL\nSELECT 'agri_share_uzs',\n       100.0 * SUM(CASE WHEN product_category = 'Сельскохозяйственная продукция' THEN (quantity - delivered) * lot * unit_price * sum_uzs / NULLIF(deal_sum, 0) END)\n             / NULLIF(SUM((quantity - delivered) * lot * unit_price * sum_uzs / NULLIF(deal_sum, 0)), 0),\n       NULL\nFROM deals_enriched WHERE deal_state = 'Исполнен(Частично)'\nUNION ALL\nSELECT 'by_unit', SUM((quantity - delivered) * lot), unit\nFROM deals_enriched WHERE deal_state = 'Исполнен(Частично)'\nGROUP BY unit",
+    "SELECT COUNT(*) AS deals,\n       ROUND(SUM(quantity), 0) AS lots_total,\n       ROUND(SUM(delivered), 0) AS lots_delivered,\n       ROUND(SUM(quantity - delivered), 0) AS lots_undelivered,\n       ROUND(SUM((quantity - delivered) * lot), 0) AS units_undelivered,\n       ROUND(SUM((quantity - delivered) * lot * unit_price * sum_uzs / NULLIF(deal_sum, 0)), 2) AS undelivered_uzs,\n       ROUND(100.0 * SUM(delivered) / NULLIF(SUM(quantity), 0), 2) AS delivery_coef_pct\nFROM deals_enriched\nWHERE deal_state = 'Исполнен(Частично)'",
+    "SELECT product_category,\n       COUNT(*) AS deals,\n       ROUND(SUM((quantity - delivered) * lot * unit_price * sum_uzs / NULLIF(deal_sum, 0)), 2) AS undelivered_uzs,\n       ROUND(100.0 * SUM((quantity - delivered) * lot * unit_price * sum_uzs / NULLIF(deal_sum, 0))\n             / NULLIF(SUM(SUM((quantity - delivered) * lot * unit_price * sum_uzs / NULLIF(deal_sum, 0))) OVER (), 0), 2) AS share_pct\nFROM deals_enriched\nWHERE deal_state = 'Исполнен(Частично)'\nGROUP BY product_category\nORDER BY undelivered_uzs DESC\nLIMIT 3",
+    "SELECT deal_no, STRFTIME(deal_date, '%d.%m.%Y') AS deal_dt, product_name, quantity, delivered, lot,\n       ROUND((quantity - delivered) * lot, 0) AS units_undelivered,\n       ROUND((quantity - delivered) * lot * unit_price * sum_uzs / NULLIF(deal_sum, 0), 2) AS undelivered_uzs\nFROM deals_enriched\nWHERE deal_state = 'Исполнен(Частично)'\nORDER BY (quantity - delivered) * lot DESC\nLIMIT 1"
+   ],
+   "tables": [
+    "deals_enriched"
+   ],
+   "tool_calls": 7,
+   "rows": 28,
+   "usage": {
+    "prompt_tokens": 45882,
+    "completion_tokens": 6010,
+    "total_tokens": 51892
+   },
+   "latency": 27.52,
+   "model": "claude-haiku-5-5",
+   "guardrail_ok": true,
+   "regenerated": true,
+   "no_answer": false,
+   "guardrail_notes": [
+    "regenerating answer; unsupported numbers=['3 776 779 720 260,10', '1 937 572 360 573,03', '3,78', '62,10', '51,30'] names=[]"
+   ],
+   "scored": [
+    {
+     "anchor": "Q4_deals",
+     "expected": 22648,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q4_und_lots",
+     "expected": 151667030,
+     "unit": "lots",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q4_und_vol",
+     "expected": 172439661,
+     "unit": "units",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q4_tln",
+     "expected": 3.777,
+     "unit": "trln UZS",
+     "tol": 0.01,
+     "matched": true
+    },
+    {
+     "anchor": "Q4_fill_pct",
+     "expected": 62.1046,
+     "unit": "%",
+     "tol": 0.02,
+     "matched": true
+    },
+    {
+     "anchor": "Q4_agri_tln",
+     "expected": 1.938,
+     "unit": "trln UZS",
+     "tol": 0.01,
+     "matched": true
+    },
+    {
+     "anchor": "Q4_max_und_lots",
+     "expected": 302376,
+     "unit": "lots",
+     "tol": 0,
+     "matched": true
+    }
+   ],
+   "matched": 7,
+   "total": 7
+  },
+  {
+   "id": "05",
+   "title": "Крупнейший физический объём 2026: ловушка единиц",
+   "question": "Какой товар в 2026 году имел наибольший физический объём? Назовите тройку лидеров с цифрами, объясните, как именно вы привели их к сопоставимому виду, и скажите, можно ли вообще назвать единую цифру «общий физический объём за 2026 год».",
+   "anchors": [
+    "Q5_wheat_t",
+    "Q5_cement_t",
+    "Q5_cotton_t",
+    "Q5_cotton_kg",
+    "Q5_units_2026"
+   ],
+   "ok": false,
+   "error": "AgentError: the language model returned an empty answer",
+   "text": "",
+   "guardrail_notes": [],
+   "scored": [
+    {
+     "anchor": "Q5_wheat_t",
+     "expected": 2330761,
+     "unit": "tonnes",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q5_cement_t",
+     "expected": 1367297,
+     "unit": "tonnes",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q5_cotton_t",
+     "expected": 1331974.8,
+     "unit": "tonnes",
+     "tol": 0.5,
+     "matched": false
+    },
+    {
+     "anchor": "Q5_cotton_kg",
+     "expected": 1331974809,
+     "unit": "kg",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q5_units_2026",
+     "expected": 7,
+     "unit": "units",
+     "tol": 0,
+     "matched": false
+    }
+   ],
+   "matched": 0,
+   "total": 5
+  },
+  {
+   "id": "06",
+   "title": "Рейтинг брокеров 2025: количество против суммы",
+   "question": "Постройте рейтинг брокеров со стороны продавца за 2025 год. Кто входит в топ-5 по сумме в сумах (с количеством сделок и долями), кто внизу, и совпадает ли лидер по количеству сделок с лидером по сумме? Какие брокеры вообще ни разу не выступали за продавца и сколько из 120 контор были активны на стороне продавца в 2025 году?",
+   "anchors": [
+    "Q6_bk111_n",
+    "Q6_bk111_bn",
+    "Q6_bk111_share",
+    "Q6_bk106_n",
+    "Q6_bk106_bn",
+    "Q6_bk102_bn",
+    "Q6_bk047_bn",
+    "Q6_bk005_n",
+    "Q6_bk005_bn",
+    "Q6_bk031_n",
+    "Q6_bk031_bn",
+    "Q6_never_seller",
+    "Q6_active_2025"
+   ],
+   "ok": true,
+   "text": "📊 Топ-5 брокеров продавца за 2025 год по сумме в сумах: BK111, BK106, BK102, BK047, BK005. Лидер по сумме (BK111) и лидер по количеству сделок (BK005) не совпадают.\n\n**Топ-5 по сумме в UZS (сделки, доли от итога 2025 года):**\n1. BK111 «Gucham Broker» MChJ: 3455918063834.59 сум, 3829 сделок, 6.64% по сумме, 3.56% по сделкам\n2. BK106 PASUR BROKER MCHJ: 3086055610782.95 сум, 3565 сделок, 5.93%, 3.31%\n3. BK102 «Shofin Broker» MChJ: 2125146205328.11 сум, 3366 сделок, 4.08%, 3.13%\n4. BK047 «Somot Broker» MChJ: 2053169975262.92 сум, 3100 сделок, 3.94%, 2.88%\n5. BK005 NAXON BROKER AJ: 1689320084240.20 сум, 4292 сделки, 3.24%, 3.99%\n\n**Лидер по количеству сделок:** BK005 NAXON BROKER AJ (4292 сделки, 1-е место по количеству). По сумме он на 5-м месте.\n\n**Внизу рейтинга по сумме:**\n- 113-е место: BK031 «Nashuya Broker» MChJ, 101228000.00 сум, 8 сделок\n- 112-е: BK051 «Tiren Broker» MChJ, 539298333.07 сум, 23 сделки\n- 111-е: BK069 BIXO‘TU BROKER MAS’ULIYATI CHEKLANGAN JAMIYATI, 6624581209.70 сум, 17 сделок\n- 110-е: BK059 «Qehut Broker» QK, 15093880916.00 сум, 91 сделка\n- 109-е: BK048 «ФЕРИ БРОКЕР» МЧЖ, 15853004877.00 сум, 56 сделок\n\n**Активность на стороне продавца:**\n- В 2025 году продавцами были 113 из 120 брокерских контор.\n- Ни разу не выступали продавцом 4 конторы: BK004 «КОТОТ БРОКЕР» МЧЖ, BK019 «Kizo‘qen Broker» MChJ, BK104 «Quvo‘ Broker» MChJ, BK113 «Shumuz Broker» XK.\n\nОснование: deals_enriched; период: сделки с 02.01.2025 по 31.12.2025 (первая и последняя даты в выборке); фильтры: seller_broker заполнен, deal_state не «Аннулирован(Не оплачен)»; сумма в сумах по sum_uzs; справочник brokers; строк в выборке: 107678; брокеров-продавцов: 113 из 120.",
+   "sql": [
+    "WITH s AS (\n  SELECT seller_broker AS code, COUNT(*) AS deals, SUM(sum_uzs) AS sum_uzs\n  FROM deals_enriched\n  WHERE deal_date >= DATE '2025-01-01' AND deal_date < DATE '2026-01-01'\n    AND deal_state <> 'Аннулирован(Не оплачен)'\n    AND seller_broker IS NOT NULL\n  GROUP BY seller_broker\n), t AS (SELECT SUM(sum_uzs) AS tot, SUM(deals) AS tot_deals FROM s)\nSELECT s.code, b.name, s.deals, ROUND(s.sum_uzs,2) AS sum_uzs,\n  ROUND(100.0*s.sum_uzs/NULLIF(t.tot,0),2) AS share_sum_pct,\n  ROUND(100.0*s.deals/NULLIF(t.tot_deals,0),2) AS share_deals_pct,\n  RANK() OVER (ORDER BY s.sum_uzs DESC) AS rank_sum,\n  RANK() OVER (ORDER BY s.deals DESC) AS rank_deals\nFROM s CROSS JOIN t LEFT JOIN brokers b ON b.code = s.code\nORDER BY s.sum_uzs DESC",
+    "SELECT\n  (SELECT COUNT(*) FROM brokers) AS brokers_total,\n  (SELECT COUNT(DISTINCT seller_broker) FROM deals_enriched WHERE deal_date >= DATE '2025-01-01' AND deal_date < DATE '2026-01-01' AND seller_broker IS NOT NULL) AS active_seller_2025_any_state,\n  (SELECT COUNT(DISTINCT seller_broker) FROM deals_enriched WHERE deal_date >= DATE '2025-01-01' AND deal_date < DATE '2026-01-01' AND deal_state <> 'Аннулирован(Не оплачен)' AND seller_broker IS NOT NULL) AS active_seller_2025_non_cancelled,\n  (SELECT COUNT(*) FROM brokers b WHERE b.code NOT IN (SELECT DISTINCT seller_broker FROM deals_enriched WHERE seller_broker IS NOT NULL)) AS never_seller_all_time,\n  (SELECT COUNT(DISTINCT seller_broker) FROM deals_enriched WHERE seller_broker IS NOT NULL) AS ever_seller_all_time",
+    "SELECT b.code, b.name, b.region\nFROM brokers b\nWHERE b.code NOT IN (SELECT DISTINCT seller_broker FROM deals_enriched WHERE seller_broker IS NOT NULL)\nORDER BY b.code",
+    "WITH s AS (\n  SELECT seller_broker AS code, COUNT(*) AS deals, SUM(sum_uzs) AS sum_uzs\n  FROM deals_enriched\n  WHERE deal_date >= DATE '2025-01-01' AND deal_date < DATE '2026-01-01'\n    AND deal_state <> 'Аннулирован(Не оплачен)' AND seller_broker IS NOT NULL\n  GROUP BY seller_broker\n)\nSELECT s.code, b.name, s.deals, ROUND(s.sum_uzs,2) AS sum_uzs, RANK() OVER (ORDER BY s.sum_uzs DESC) AS rank_sum\nFROM s LEFT JOIN brokers b ON b.code = s.code\nORDER BY s.sum_uzs ASC\nLIMIT 5",
+    "SELECT\n  CAST(MIN(deal_date) AS VARCHAR) AS first_day_2025,\n  CAST(MAX(deal_date) AS VARCHAR) AS last_day_2025,\n  COUNT(*) AS rows_2025_non_cancelled,\n  COUNT(DISTINCT seller_broker) AS sellers_brokers_2025,\n  (SELECT COUNT(*) FROM brokers) AS brokers_total,\n  (SELECT COUNT(*) FROM brokers b WHERE b.code NOT IN (SELECT DISTINCT seller_broker FROM deals_enriched WHERE seller_broker IS NOT NULL)) AS never_seller\nFROM deals_enriched\nWHERE deal_date >= DATE '2025-01-01' AND deal_date < DATE '2026-01-01'\n  AND deal_state <> 'Аннулирован(Не оплачен)' AND seller_broker IS NOT NULL",
+    "WITH s AS (\n  SELECT seller_broker AS code, COUNT(*) AS deals, SUM(sum_uzs) AS sum_uzs\n  FROM deals_enriched\n  WHERE deal_date >= DATE '2025-01-01' AND deal_date < DATE '2026-01-01'\n    AND deal_state <> 'Аннулирован(Не оплачен)' AND seller_broker IS NOT NULL\n  GROUP BY seller_broker\n), t AS (SELECT SUM(sum_uzs) AS tot, SUM(deals) AS tot_deals FROM s)\nSELECT s.code, b.name, s.deals, ROUND(s.sum_uzs,2) AS sum_uzs,\n  ROUND(100.0*s.sum_uzs/NULLIF(t.tot,0),2) AS share_sum_pct,\n  ROUND(100.0*s.deals/NULLIF(t.tot_deals,0),2) AS share_deals_pct,\n  RANK() OVER (ORDER BY s.sum_uzs DESC) AS rank_sum,\n  RANK() OVER (ORDER BY s.deals DESC) AS rank_deals\nFROM s CROSS JOIN t LEFT JOIN brokers b ON b.code = s.code\nORDER BY s.sum_uzs DESC\nLIMIT 5",
+    "WITH s AS (\n  SELECT seller_broker AS code, COUNT(*) AS deals, SUM(sum_uzs) AS sum_uzs\n  FROM deals_enriched\n  WHERE deal_date >= DATE '2025-01-01' AND deal_date < DATE '2026-01-01'\n    AND deal_state <> 'Аннулирован(Не оплачен)' AND seller_broker IS NOT NULL\n  GROUP BY seller_broker\n)\nSELECT s.code, b.name, s.deals, ROUND(s.sum_uzs,2) AS sum_uzs, RANK() OVER (ORDER BY s.sum_uzs DESC) AS rank_sum\nFROM s LEFT JOIN brokers b ON b.code = s.code\nORDER BY s.sum_uzs ASC\nLIMIT 5"
+   ],
+   "tables": [
+    "brokers",
+    "deals_enriched"
+   ],
+   "tool_calls": 7,
+   "rows": 121,
+   "usage": {
+    "prompt_tokens": 107839,
+    "completion_tokens": 7128,
+    "total_tokens": 114967
+   },
+   "latency": 31.74,
+   "model": "claude-haiku-5-5",
+   "guardrail_ok": true,
+   "regenerated": true,
+   "no_answer": false,
+   "guardrail_notes": [
+    "regenerating answer; unsupported numbers=['31.12.2025'] names=[]"
+   ],
+   "scored": [
+    {
+     "anchor": "Q6_bk111_n",
+     "expected": 4128,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q6_bk111_bn",
+     "expected": 3731.779,
+     "unit": "bn UZS",
+     "tol": 0.5,
+     "matched": false
+    },
+    {
+     "anchor": "Q6_bk111_share",
+     "expected": 6.6667,
+     "unit": "%",
+     "tol": 0.01,
+     "matched": true
+    },
+    {
+     "anchor": "Q6_bk106_n",
+     "expected": 3838,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q6_bk106_bn",
+     "expected": 3309.5,
+     "unit": "bn UZS",
+     "tol": 0.5,
+     "matched": false
+    },
+    {
+     "anchor": "Q6_bk102_bn",
+     "expected": 2276.498,
+     "unit": "bn UZS",
+     "tol": 0.5,
+     "matched": false
+    },
+    {
+     "anchor": "Q6_bk047_bn",
+     "expected": 2202.409,
+     "unit": "bn UZS",
+     "tol": 0.5,
+     "matched": false
+    },
+    {
+     "anchor": "Q6_bk005_n",
+     "expected": 4652,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q6_bk005_bn",
+     "expected": 1822.39,
+     "unit": "bn UZS",
+     "tol": 0.5,
+     "matched": false
+    },
+    {
+     "anchor": "Q6_bk031_n",
+     "expected": 8,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q6_bk031_bn",
+     "expected": 0.101,
+     "unit": "bn UZS",
+     "tol": 0.01,
+     "matched": true
+    },
+    {
+     "anchor": "Q6_never_seller",
+     "expected": 4,
+     "unit": "brokers",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q6_active_2025",
+     "expected": 113,
+     "unit": "brokers",
+     "tol": 0,
+     "matched": true
+    }
+   ],
+   "matched": 5,
+   "total": 13
+  },
+  {
+   "id": "07",
+   "title": "Аудит целостности реестра",
+   "question": "Проведите аудит реестра. Укажите: общее число сделок и диапазон номеров с числом пропущенных номеров; сколько контрактов заведено, сколько использовано и каково распределение неиспользованных по валюте; сколько компаний зарегистрировано, сколько реально торгует и сколько из них продавцы и покупатели; сколько брокеров и сколько ни разу не выступали за продавца; покрытие таблицы курса и монотонен ли курс; есть ли «осиротевшие» сделки; и число различных торговых дней.",
+   "anchors": [
+    "G_deals",
+    "Q7_span",
+    "Q7_gaps",
+    "G_contracts",
+    "G_contracts_used",
+    "G_contracts_unused",
+    "Q7_unused_uzs",
+    "Q7_unused_usd",
+    "G_participants",
+    "G_sellers",
+    "G_buyers",
+    "Q7_p_unused",
+    "G_brokers",
+    "Q6_never_seller",
+    "Q7_rate_days",
+    "Q7_rate_missing",
+    "Q7_rate_min",
+    "Q7_rate_max",
+    "Q7_rate_down_days",
+    "Q7_orphans",
+    "Q7_deal_dates",
+    "Q7_weekend"
+   ],
+   "ok": true,
+   "text": "📊 Реестр целостный: сирот среди сделок нет, но курс не монотонен, а 4956 номеров сделок пропущены.\n\n**Сделки:** 500 000 строк, все номера уникальны. Диапазон №100001–№604956, пропущено 4956 номеров. Исполнено или частично исполнено 453 709, аннулировано (не оплачен) 33 719, прочие состояния 12 572. Торговых дней: 1236 (с 03.01.2022 по 30.10.2026).\n\n**Контракты:** заведено 6616, использовано в сделках 6483, не использовано 133.\n- UZS: 6468 заведено, 6341 использован, 127 не использован.\n- USD: 148 заведено, 142 использован, 6 не использован.\n\n**Участники:** зарегистрировано 14 392 компании. Торгуют 14 389; 3 зарегистрированы, но ни разу не участвовали в сделках. Продавцов 392, покупателей 13 997. Компаний, которые были и продавцами, и покупателями, нет.\n\n**Брокеры:** всего 120. Ни разу не выступали продавцом 4 брокера; покупателем не выступал ни один.\n\n**Курс USD→UZS:** 1765 строк, по одной на каждый календарный день с 01.01.2022 по 31.10.2026, пропусков нет, все значения заполнены. Курс не монотонен: 940 повышений, 822 понижения, 2 дня без изменений. Диапазон значений 10 829,10–13 500,03 сум. Все валютные сделки и все торговые дни покрыты курсом.\n\n**Осиротевшие сделки:** не обнаружены. Все контракты, ИНН продавцов и покупателей, а также коды брокеров сделок есть в соответствующих справочниках. Пустых ключевых полей и валюты нет.\n\nОснование: deals_enriched, contracts, participants, brokers, usd_rates; фильтров нет (весь реестр на 30.10.2026); строк: 500 000 сделок, 6616 контрактов, 14 392 участника, 120 брокеров, 1765 курсов.",
+   "sql": [
+    "SELECT COUNT(*) AS deals_rows, COUNT(DISTINCT deal_no) AS distinct_deal_no, MIN(deal_no) AS min_no, MAX(deal_no) AS max_no, (MAX(deal_no)-MIN(deal_no)+1) - COUNT(DISTINCT deal_no) AS missing_numbers, SUM(CASE WHEN deal_state IN ('Исполнен','Исполнен(Частично)') THEN 1 ELSE 0 END) AS completed, SUM(CASE WHEN deal_state='Аннулирован(Не оплачен)' THEN 1 ELSE 0 END) AS cancelled, SUM(CASE WHEN deal_state NOT IN ('Исполнен','Исполнен(Частично)','Аннулирован(Не оплачен)') THEN 1 ELSE 0 END) AS other_states, COUNT(DISTINCT deal_date) AS trading_days, MIN(deal_date) AS first_day, MAX(deal_date) AS last_day FROM deals_enriched",
+    "WITH used AS (SELECT DISTINCT contract_no FROM deals_enriched) SELECT c.currency, COUNT(*) AS contracts_total, SUM(CASE WHEN u.contract_no IS NOT NULL THEN 1 ELSE 0 END) AS used, SUM(CASE WHEN u.contract_no IS NULL THEN 1 ELSE 0 END) AS unused FROM contracts c LEFT JOIN used u ON u.contract_no = c.contract_no GROUP BY c.currency ORDER BY c.currency",
+    "SELECT (SELECT COUNT(*) FROM contracts) AS contracts_total, (SELECT COUNT(DISTINCT contract_no) FROM contracts) AS contracts_distinct, (SELECT COUNT(DISTINCT contract_no) FROM deals_enriched) AS used_distinct_in_deals, (SELECT COUNT(DISTINCT contract_no) FROM deals_enriched WHERE contract_no NOT IN (SELECT contract_no FROM contracts)) AS deal_contracts_not_in_registry, (SELECT COUNT(*) FROM contracts WHERE contract_no NOT IN (SELECT contract_no FROM deals_enriched)) AS unused_total",
+    "WITH deal_inns AS (SELECT seller_inn AS inn, 'S' AS side FROM deals_enriched UNION ALL SELECT buyer_inn, 'B' FROM deals_enriched), per AS (SELECT inn, MAX(CASE WHEN side='S' THEN 1 ELSE 0 END) AS as_seller, MAX(CASE WHEN side='B' THEN 1 ELSE 0 END) AS as_buyer FROM deal_inns GROUP BY inn) SELECT (SELECT COUNT(*) FROM participants) AS participants_total, (SELECT COUNT(DISTINCT inn) FROM participants) AS participants_distinct, (SELECT COUNT(*) FROM per) AS trading_inns, SUM(as_seller) AS sellers_any, SUM(as_buyer) AS buyers_any, SUM(CASE WHEN as_seller=1 AND as_buyer=1 THEN 1 ELSE 0 END) AS both_roles, SUM(CASE WHEN inn NOT IN (SELECT inn FROM participants) THEN 1 ELSE 0 END) AS trading_not_in_participants, (SELECT COUNT(*) FROM participants WHERE inn NOT IN (SELECT inn FROM per)) AS registered_never_traded FROM per\"",
+    "SELECT (SELECT COUNT(*) FROM brokers) AS brokers_total, (SELECT COUNT(DISTINCT code) FROM brokers) AS brokers_distinct, (SELECT COUNT(*) FROM brokers WHERE code NOT IN (SELECT seller_broker FROM deals_enriched WHERE seller_broker IS NOT NULL)) AS never_seller, (SELECT COUNT(*) FROM brokers WHERE code NOT IN (SELECT buyer_broker FROM deals_enriched WHERE buyer_broker IS NOT NULL)) AS never_buyer, (SELECT COUNT(DISTINCT seller_broker) FROM deals_enriched) AS distinct_seller_brokers_in_deals, (SELECT COUNT(DISTINCT buyer_broker) FROM deals_enriched) AS distinct_buyer_brokers_in_deals, (SELECT COUNT(DISTINCT seller_broker) FROM deals_enriched WHERE seller_broker NOT IN (SELECT code FROM brokers)) AS deal_brokers_not_in_registry\"",
+    "WITH r AS (SELECT date, rate, LAG(rate) OVER (ORDER BY date) AS prev FROM usd_rates) SELECT COUNT(*) AS rate_rows, COUNT(DISTINCT date) AS distinct_dates, MIN(date) AS first_date, MAX(date) AS last_date, (MAX(date)-MIN(date)+1) AS calendar_days, SUM(CASE WHEN rate < prev THEN 1 ELSE 0 END) AS decreases, SUM(CASE WHEN rate > prev THEN 1 ELSE 0 END) AS increases, SUM(CASE WHEN rate = prev THEN 1 ELSE 0 END) AS unchanged, MIN(rate) AS min_rate, MAX(rate) AS max_rate, SUM(CASE WHEN rate IS NULL THEN 1 ELSE 0 END) AS null_rates, (SELECT COUNT(DISTINCT deal_date) FROM deals_enriched WHERE deal_date NOT IN (SELECT date FROM usd_rates)) AS deal_days_without_rate, (SELECT COUNT(*) FROM deals_enriched WHERE usd_rate IS NULL AND currency='USD') AS usd_deals_without_rate FROM r\"",
+    "SELECT (SELECT COUNT(*) FROM deals_enriched WHERE contract_no NOT IN (SELECT contract_no FROM contracts)) AS orphan_contract, (SELECT COUNT(*) FROM deals_enriched WHERE seller_inn NOT IN (SELECT inn FROM participants)) AS orphan_seller, (SELECT COUNT(*) FROM deals_enriched WHERE buyer_inn NOT IN (SELECT inn FROM participants)) AS orphan_buyer, (SELECT COUNT(*) FROM deals_enriched WHERE seller_broker NOT IN (SELECT code FROM brokers)) AS orphan_seller_broker, (SELECT COUNT(*) FROM deals_enriched WHERE buyer_broker NOT IN (SELECT code FROM brokers)) AS orphan_buyer_broker, (SELECT COUNT(*) FROM deals_enriched WHERE currency IS NULL) AS no_currency, (SELECT COUNT(*) FROM deals_enriched WHERE product_name IS NULL OR contract_no IS NULL OR deal_date IS NULL) AS null_keys\"",
+    "WITH deal_inns AS (SELECT seller_inn AS inn, 'S' AS side FROM deals_enriched UNION ALL SELECT buyer_inn, 'B' FROM deals_enriched), per AS (SELECT inn, MAX(CASE WHEN side='S' THEN 1 ELSE 0 END) AS as_seller, MAX(CASE WHEN side='B' THEN 1 ELSE 0 END) AS as_buyer FROM deal_inns GROUP BY inn) SELECT (SELECT COUNT(*) FROM participants) AS participants_total, (SELECT COUNT(DISTINCT inn) FROM participants) AS participants_distinct, (SELECT COUNT(*) FROM per) AS trading_inns, SUM(as_seller) AS sellers_any, SUM(as_buyer) AS buyers_any, SUM(CASE WHEN as_seller=1 AND as_buyer=1 THEN 1 ELSE 0 END) AS both_roles, SUM(CASE WHEN inn NOT IN (SELECT inn FROM participants) THEN 1 ELSE 0 END) AS trading_not_in_participants, (SELECT COUNT(*) FROM participants WHERE inn NOT IN (SELECT inn FROM per)) AS registered_never_traded FROM per",
+    "SELECT (SELECT COUNT(*) FROM brokers) AS brokers_total, (SELECT COUNT(DISTINCT code) FROM brokers) AS brokers_distinct, (SELECT COUNT(*) FROM brokers WHERE code NOT IN (SELECT seller_broker FROM deals_enriched WHERE seller_broker IS NOT NULL)) AS never_seller, (SELECT COUNT(*) FROM brokers WHERE code NOT IN (SELECT buyer_broker FROM deals_enriched WHERE buyer_broker IS NOT NULL)) AS never_buyer, (SELECT COUNT(DISTINCT seller_broker) FROM deals_enriched) AS distinct_seller_brokers_in_deals, (SELECT COUNT(DISTINCT buyer_broker) FROM deals_enriched) AS distinct_buyer_brokers_in_deals, (SELECT COUNT(DISTINCT seller_broker) FROM deals_enriched WHERE seller_broker NOT IN (SELECT code FROM brokers)) AS deal_brokers_not_in_registry",
+    "WITH r AS (SELECT date, rate, LAG(rate) OVER (ORDER BY date) AS prev FROM usd_rates) SELECT COUNT(*) AS rate_rows, COUNT(DISTINCT date) AS distinct_dates, MIN(date) AS first_date, MAX(date) AS last_date, (MAX(date)-MIN(date)+1) AS calendar_days, SUM(CASE WHEN rate < prev THEN 1 ELSE 0 END) AS decreases, SUM(CASE WHEN rate > prev THEN 1 ELSE 0 END) AS increases, SUM(CASE WHEN rate = prev THEN 1 ELSE 0 END) AS unchanged, MIN(rate) AS min_rate, MAX(rate) AS max_rate, SUM(CASE WHEN rate IS NULL THEN 1 ELSE 0 END) AS null_rates, (SELECT COUNT(DISTINCT deal_date) FROM deals_enriched WHERE deal_date NOT IN (SELECT date FROM usd_rates)) AS deal_days_without_rate, (SELECT COUNT(*) FROM deals_enriched WHERE usd_rate IS NULL AND currency='USD') AS usd_deals_without_rate FROM r",
+    "SELECT (SELECT COUNT(*) FROM deals_enriched WHERE contract_no NOT IN (SELECT contract_no FROM contracts)) AS orphan_contract, (SELECT COUNT(*) FROM deals_enriched WHERE seller_inn NOT IN (SELECT inn FROM participants)) AS orphan_seller, (SELECT COUNT(*) FROM deals_enriched WHERE buyer_inn NOT IN (SELECT inn FROM participants)) AS orphan_buyer, (SELECT COUNT(*) FROM deals_enriched WHERE seller_broker NOT IN (SELECT code FROM brokers)) AS orphan_seller_broker, (SELECT COUNT(*) FROM deals_enriched WHERE buyer_broker NOT IN (SELECT code FROM brokers)) AS orphan_buyer_broker, (SELECT COUNT(*) FROM deals_enriched WHERE currency IS NULL) AS no_currency, (SELECT COUNT(*) FROM deals_enriched WHERE product_name IS NULL OR contract_no IS NULL OR deal_date IS NULL) AS null_keys"
+   ],
+   "tables": [
+    "brokers",
+    "contracts",
+    "deals_enriched",
+    "participants",
+    "usd_rates"
+   ],
+   "tool_calls": 11,
+   "rows": 8,
+   "usage": {
+    "prompt_tokens": 28682,
+    "completion_tokens": 6485,
+    "total_tokens": 35167
+   },
+   "latency": 22.95,
+   "model": "claude-haiku-5-5",
+   "guardrail_ok": true,
+   "regenerated": false,
+   "no_answer": false,
+   "guardrail_notes": [],
+   "scored": [
+    {
+     "anchor": "G_deals",
+     "expected": 500000,
+     "unit": "deals",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q7_span",
+     "expected": 504956,
+     "unit": "numbers",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q7_gaps",
+     "expected": 4956,
+     "unit": "numbers",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "G_contracts",
+     "expected": 6616,
+     "unit": "rows",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "G_contracts_used",
+     "expected": 6483,
+     "unit": "rows",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "G_contracts_unused",
+     "expected": 133,
+     "unit": "rows",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q7_unused_uzs",
+     "expected": 127,
+     "unit": "contracts",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q7_unused_usd",
+     "expected": 6,
+     "unit": "contracts",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "G_participants",
+     "expected": 14392,
+     "unit": "rows",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "G_sellers",
+     "expected": 392,
+     "unit": "companies",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "G_buyers",
+     "expected": 13997,
+     "unit": "companies",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q7_p_unused",
+     "expected": 3,
+     "unit": "companies",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "G_brokers",
+     "expected": 120,
+     "unit": "firms",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q6_never_seller",
+     "expected": 4,
+     "unit": "brokers",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q7_rate_days",
+     "expected": 1765,
+     "unit": "days",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q7_rate_missing",
+     "expected": 0,
+     "unit": "days",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q7_rate_min",
+     "expected": 10829.1,
+     "unit": "UZS/USD",
+     "tol": 0.01,
+     "matched": true
+    },
+    {
+     "anchor": "Q7_rate_max",
+     "expected": 13500.03,
+     "unit": "UZS/USD",
+     "tol": 0.01,
+     "matched": true
+    },
+    {
+     "anchor": "Q7_rate_down_days",
+     "expected": 822,
+     "unit": "days",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q7_orphans",
+     "expected": 0,
+     "unit": "rows",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q7_deal_dates",
+     "expected": 1236,
+     "unit": "days",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q7_weekend",
+     "expected": 0,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    }
+   ],
+   "matched": 18,
+   "total": 22
+  },
+  {
+   "id": "08",
+   "title": "Платёжная и поставочная дисциплина",
+   "question": "Используя «Срок оплаты» (дней от даты сделки) и «Срок поставки» (дней от даты оплаты), оцените дисциплину: сколько сделок оплачено, сколько оплачено с нарушением срока, каков максимальный разрешённый и фактический срок оплаты; сколько поставлено, сколько поставлено с нарушением, на сколько дней в среднем и максимум, какая стоимость затронута и какая категория хуже всех?",
+   "anchors": [
+    "Q8_paid",
+    "Q8_late_pay",
+    "Q8_pay_max",
+    "Q8_term_pay_max",
+    "Q8_shipped",
+    "Q8_late_sup",
+    "Q8_late_pct",
+    "Q8_overrun_avg",
+    "Q8_overrun_max",
+    "Q8_late_tln",
+    "Q8_late_agri"
+   ],
+   "ok": true,
+   "text": "В данных реестра ответа на этот вопрос нет.",
+   "sql": [
+    "SELECT d.deal_state, COUNT(*) n, COUNT(d.payment_date) pay_n, COUNT(d.delivery_date) del_n, COUNT(d.delivered) dl_n, COUNT(c.payment_days) pd_n, COUNT(c.delivery_days) dd_n, MIN(c.payment_days) pmin, MAX(c.payment_days) pmax, MIN(c.delivery_days) dmin, MAX(c.delivery_days) dmax FROM deals_enriched d LEFT JOIN contracts c ON c.contract_no = d.contract_no GROUP BY 1 ORDER BY 2 DESC",
+    "WITH x AS (\nSELECT d.*, c.payment_days pd, c.delivery_days dd,\n date_diff('day', d.deal_date, d.payment_date) act_pay,\n date_diff('day', d.payment_date, d.delivery_date) act_del\nFROM deals_enriched d LEFT JOIN contracts c ON c.contract_no=d.contract_no\nWHERE d.payment_date IS NOT NULL)\nSELECT 'pay' k, COUNT(*) n, SUM(CASE WHEN act_pay>pd THEN 1 ELSE 0 END) late_n,\n MAX(pd) max_allowed, MAX(act_pay) max_actual, AVG(CASE WHEN act_pay>pd THEN act_pay-pd END) avg_over,\n MAX(act_pay-pd) max_over, SUM(CASE WHEN act_pay>pd THEN sum_uzs ELSE 0 END) late_uzs, SUM(sum_uzs) tot_uzs,\n NULL::BIGINT dn, NULL::BIGINT dlate, NULL::DOUBLE dover, NULL::BIGINT dmax_over, NULL::DOUBLE dtot, NULL::DOUBLE dlate_uzs\nFROM x\nUNION ALL\nSELECT 'del', COUNT(*), NULL, MAX(dd), MAX(act_del), NULL, NULL, NULL, NULL,\n COUNT(*) FILTER (WHERE delivery_date IS NOT NULL),\n SUM(CASE WHEN act_del>dd THEN 1 ELSE 0 END),\n AVG(CASE WHEN act_del>dd THEN act_del-dd END),\n MAX(act_del-dd),\n SUM(sum_uzs) FILTER (WHERE delivery_date IS NOT NULL),\n SUM(CASE WHEN act_del>dd THEN sum_uzs ELSE 0 END)\nFROM x WHERE delivery_date IS NOT NULL",
+    "WITH x AS (\nSELECT d.product_group, d.sum_uzs, c.delivery_days dd, date_diff('day', d.payment_date, d.delivery_date) act_del\nFROM deals_enriched d LEFT JOIN contracts c ON c.contract_no=d.contract_no\nWHERE d.delivery_date IS NOT NULL)\nSELECT product_group, COUNT(*) n, SUM(CASE WHEN act_del>dd THEN 1 ELSE 0 END) late_n,\n ROUND(100.0*SUM(CASE WHEN act_del>dd THEN 1 ELSE 0 END)/COUNT(*),2) late_pct,\n ROUND(AVG(CASE WHEN act_del>dd THEN act_del-dd END),2) avg_over, MAX(act_del-dd) max_over,\n ROUND(SUM(CASE WHEN act_del>dd THEN sum_uzs ELSE 0 END),2) late_uzs\nFROM x GROUP BY 1 ORDER BY late_pct DESC",
+    "WITH x AS (\nSELECT d.product_category, d.sum_uzs, c.delivery_days dd, date_diff('day', d.payment_date, d.delivery_date) act_del\nFROM deals_enriched d LEFT JOIN contracts c ON c.contract_no=d.contract_no\nWHERE d.delivery_date IS NOT NULL)\nSELECT product_category, COUNT(*) n, SUM(CASE WHEN act_del>dd THEN 1 ELSE 0 END) late_n,\n ROUND(100.0*SUM(CASE WHEN act_del>dd THEN 1 ELSE 0 END)/COUNT(*),2) late_pct,\n ROUND(AVG(CASE WHEN act_del>dd THEN act_del-dd END),2) avg_over, MAX(act_del-dd) max_over\nFROM x GROUP BY 1 HAVING COUNT(*)>=100 ORDER BY late_pct DESC LIMIT 10",
+    "WITH x AS (\nSELECT d.deal_state, d.sum_uzs, c.payment_days pd, c.delivery_days dd,\n date_diff('day', d.deal_date, d.payment_date) act_pay,\n date_diff('day', d.payment_date, d.delivery_date) act_del\nFROM deals_enriched d LEFT JOIN contracts c ON c.contract_no=d.contract_no\nWHERE d.payment_date IS NOT NULL AND d.deal_state IN ('Исполнен','Исполнен(Частично)','Оплачен'))\nSELECT COUNT(*) AS paid_deals,\n SUM(CASE WHEN act_pay>pd THEN 1 ELSE 0 END) AS paid_late,\n MAX(pd) AS max_allowed_pay_days, MAX(act_pay) AS max_actual_pay_days,\n COUNT(delivery_date) AS delivered_deals_base\nFROM x LEFT JOIN (SELECT 1) t ON FALSE\n\"",
+    "WITH x AS (\nSELECT d.deal_state, d.sum_uzs, d.delivery_date, c.payment_days pd, c.delivery_days dd,\n date_diff('day', d.deal_date, d.payment_date) act_pay,\n date_diff('day', d.payment_date, d.delivery_date) act_del\nFROM deals_enriched d LEFT JOIN contracts c ON c.contract_no=d.contract_no\nWHERE d.payment_date IS NOT NULL)\nSELECT 'pay' AS k, COUNT(*) AS deals, SUM(CASE WHEN act_pay>pd THEN 1 ELSE 0 END) AS late,\n MAX(pd) AS max_allowed, MAX(act_pay) AS max_actual, SUM(sum_uzs) AS sum_uzs,\n CAST(NULL AS DOUBLE) AS avg_over, CAST(NULL AS BIGINT) AS max_over, CAST(NULL AS DECIMAL(38,6)) AS late_sum_uzs\nFROM x\nUNION ALL\nSELECT 'del', COUNT(*), SUM(CASE WHEN act_del>dd THEN 1 ELSE 0 END), MAX(dd), MAX(act_del), SUM(sum_uzs),\n AVG(CASE WHEN act_del>dd THEN act_del-dd END), MAX(act_del-dd), SUM(CASE WHEN act_del>dd THEN sum_uzs ELSE 0 END)\nFROM x WHERE delivery_date IS NOT NULL",
+    "WITH x AS (\nSELECT d.sum_uzs, c.delivery_days dd, date_diff('day', d.payment_date, d.delivery_date) act_del\nFROM deals_enriched d LEFT JOIN contracts c ON c.contract_no=d.contract_no\nWHERE d.delivery_date IS NOT NULL)\nSELECT COUNT(*) AS deliveries, SUM(CASE WHEN act_del>dd THEN 1 ELSE 0 END) AS late,\n ROUND(100.0*SUM(CASE WHEN act_del>dd THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),2) AS late_pct\nFROM x"
+   ],
+   "tables": [
+    "contracts",
+    "deals_enriched"
+   ],
+   "tool_calls": 7,
+   "rows": 23,
+   "usage": {
+    "prompt_tokens": 74232,
+    "completion_tokens": 5659,
+    "total_tokens": 79891
+   },
+   "latency": 26.28,
+   "model": "claude-haiku-5-5",
+   "guardrail_ok": true,
+   "regenerated": true,
+   "no_answer": true,
+   "guardrail_notes": [
+    "regenerating answer; unsupported numbers=['7 704 993 702 929,16', '3,92', '100'] names=[]",
+    "guardrail rejected answer; unsupported numbers=['7 704 993 702 929,16', '100'] names=[]"
+   ],
+   "scored": [
+    {
+     "anchor": "Q8_paid",
+     "expected": 459563,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q8_late_pay",
+     "expected": 0,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q8_pay_max",
+     "expected": 90,
+     "unit": "days",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q8_term_pay_max",
+     "expected": 90,
+     "unit": "days",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q8_shipped",
+     "expected": 453709,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q8_late_sup",
+     "expected": 17805,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q8_late_pct",
+     "expected": 3.9243,
+     "unit": "%",
+     "tol": 0.01,
+     "matched": false
+    },
+    {
+     "anchor": "Q8_overrun_avg",
+     "expected": 7.9504,
+     "unit": "days",
+     "tol": 0.01,
+     "matched": false
+    },
+    {
+     "anchor": "Q8_overrun_max",
+     "expected": 15,
+     "unit": "days",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q8_late_tln",
+     "expected": 7.705,
+     "unit": "trln UZS",
+     "tol": 0.01,
+     "matched": false
+    },
+    {
+     "anchor": "Q8_late_agri",
+     "expected": 6633,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    }
+   ],
+   "matched": 0,
+   "total": 11
+  },
+  {
+   "id": "09",
+   "title": "Топ-регион 2024: семантика поля",
+   "question": "Какой регион дал наибольший оборот в 2024 году и каковы первые пять? В ответе объясните, какой именно столбец «Регион» вы использовали и почему — регион есть в файле сделок, в карточках контрактов и в справочнике компаний. Можно ли их соединить между собой?",
+   "anchors": [
+    "Q9_toshkent_bn",
+    "Q9_toshkent_share",
+    "Q9_namangan_bn",
+    "Q9_xorazm_bn",
+    "Q9_sirdaryo_bn",
+    "Q9_toshkent_v_bn",
+    "Q9_region_match_seller",
+    "Q9_region_match_contract"
+   ],
+   "ok": true,
+   "text": "📊 Наибольший оборот в 2024 году у региона **Toshkent shahri**: 8200915052933.51 сум.\n\nТоп-5 по сумме `sum_uzs` (сумы), без отменённых сделок:\n1. Toshkent shahri: 8200915052933.51 сум (19772 сделки)\n2. Namangan viloyati: 4765278997732.50 сум (12604)\n3. Xorazm viloyati: 4181188234646.32 сум (6056)\n4. Sirdaryo viloyati: 3785138735040.03 сум (5427)\n5. Toshkent viloyati: 3549462184575.24 сум (8555)\n\nДаты сделок в выборке: от 2024-01-02 до 2024-12-31.\n\nИсправление к предыдущему ответу: число 106647 относилось ко всем сделкам 2024 года, включая отменённые. Без отменённых сделок в 2024 году их 99324. Все строки регионов сходятся с региональным столбцом продавца в справочнике компаний (99324 из 99324). С регионом в карточке контракта совпадений нет (0 из 99324).\n\nОснование: deals_enriched, participants, contracts; фильтры: deal_date с 2024-01-01 по 2024-12-31 (строго до 2025-01-01), deal_state ≠ 'Аннулирован(Не оплачен)', группировка по region, сортировка по sum_uzs; строк: 5 (показаны топ-5), проверка связей: 99324.",
+   "sql": [
+    "SELECT region, ROUND(SUM(sum_uzs), 2) AS turnover_uzs, COUNT(*) AS deals FROM deals_enriched WHERE deal_date >= DATE '2024-01-01' AND deal_date < DATE '2025-01-01' AND deal_state <> 'Аннулирован(Не оплачен)' GROUP BY region ORDER BY turnover_uzs DESC LIMIT 10",
+    "SELECT 'deals_vs_contracts' AS check_name, COUNT(*) AS rows_total, SUM(CASE WHEN d.region = c.region THEN 1 ELSE 0 END) AS same_region, SUM(CASE WHEN d.region <> c.region THEN 1 ELSE 0 END) AS diff_region FROM deals_enriched d JOIN contracts c ON c.contract_no = d.contract_no WHERE d.deal_date >= DATE '2024-01-01' AND d.deal_date < DATE '2025-01-01'",
+    "SELECT 'deals_vs_participants_seller' AS check_name, COUNT(*) AS rows_total, SUM(CASE WHEN d.region = p.region THEN 1 ELSE 0 END) AS same_region, SUM(CASE WHEN d.region <> p.region THEN 1 ELSE 0 END) AS diff_region FROM deals_enriched d JOIN participants p ON p.inn = d.seller_inn WHERE d.deal_date >= DATE '2024-01-01' AND d.deal_date < DATE '2025-01-01'",
+    "SELECT region, ROUND(SUM(sum_uzs), 2) AS turnover_uzs, COUNT(*) AS deals, MIN(deal_date) AS first_date, MAX(deal_date) AS last_date FROM deals_enriched WHERE deal_date >= DATE '2024-01-01' AND deal_date < DATE '2025-01-01' AND deal_state <> 'Аннулирован(Не оплачен)' GROUP BY region ORDER BY turnover_uzs DESC LIMIT 5",
+    "SELECT COUNT(*) AS rows_total, SUM(CASE WHEN d.region = p.region THEN 1 ELSE 0 END) AS same_region_as_participant, SUM(CASE WHEN d.region = c.region THEN 1 ELSE 0 END) AS same_region_as_contract FROM deals_enriched d LEFT JOIN participants p ON p.inn = d.seller_inn LEFT JOIN contracts c ON c.contract_no = d.contract_no WHERE d.deal_date >= DATE '2024-01-01' AND d.deal_date < DATE '2025-01-01' AND d.deal_state <> 'Аннулирован(Не оплачен)'"
+   ],
+   "tables": [
+    "contracts",
+    "deals_enriched",
+    "participants"
+   ],
+   "tool_calls": 5,
+   "rows": 18,
+   "usage": {
+    "prompt_tokens": 31063,
+    "completion_tokens": 4180,
+    "total_tokens": 35243
+   },
+   "latency": 19.28,
+   "model": "claude-haiku-5-5",
+   "guardrail_ok": true,
+   "regenerated": true,
+   "no_answer": false,
+   "guardrail_notes": [
+    "regenerating answer; unsupported numbers=['31.12.2024'] names=[]"
+   ],
+   "scored": [
+    {
+     "anchor": "Q9_toshkent_bn",
+     "expected": 8832.241,
+     "unit": "bn UZS",
+     "tol": 1.0,
+     "matched": false
+    },
+    {
+     "anchor": "Q9_toshkent_share",
+     "expected": 19.242,
+     "unit": "%",
+     "tol": 0.02,
+     "matched": false
+    },
+    {
+     "anchor": "Q9_namangan_bn",
+     "expected": 5125.381,
+     "unit": "bn UZS",
+     "tol": 1.0,
+     "matched": false
+    },
+    {
+     "anchor": "Q9_xorazm_bn",
+     "expected": 4460.919,
+     "unit": "bn UZS",
+     "tol": 1.0,
+     "matched": false
+    },
+    {
+     "anchor": "Q9_sirdaryo_bn",
+     "expected": 4081.738,
+     "unit": "bn UZS",
+     "tol": 1.0,
+     "matched": false
+    },
+    {
+     "anchor": "Q9_toshkent_v_bn",
+     "expected": 3801.187,
+     "unit": "bn UZS",
+     "tol": 1.0,
+     "matched": true
+    },
+    {
+     "anchor": "Q9_region_match_seller",
+     "expected": 100.0,
+     "unit": "%",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q9_region_match_contract",
+     "expected": 0.0,
+     "unit": "%",
+     "tol": 0,
+     "matched": true
+    }
+   ],
+   "matched": 2,
+   "total": 8
+  },
+  {
+   "id": "10",
+   "title": "2026 год к дате: сопоставимость, концентрация, три отказа",
+   "question": "Подведите итог 2026 года на текущую дату: число сделок, оборот, средняя и медианная сделка, активные продавцы и покупатели, крупнейший покупатель и его доля. Сравните с 2025 годом — но корректно. Затем ответьте на три вопроса или откажитесь с обоснованием: (а) какова валовая прибыль по сделкам 2025 года, (б) какова общая сумма НДС по сделкам 2025 года, (в) каким будет оборот в 2027 году?",
+   "anchors": [
+    "Q10_n",
+    "Q10_tln",
+    "Q10_avg",
+    "Q10_median",
+    "Q10_sellers",
+    "Q10_buyers",
+    "Q10_top1_bn",
+    "Q10_top1_share",
+    "Q10_top10_share",
+    "Q10_ytd25_n",
+    "Q10_ytd25_tln",
+    "Q10_chg_count",
+    "Q10_chg_value"
+   ],
+   "ok": true,
+   "text": "📊 2026 год (с 01.01 по 30.10): 80 468 завершённых сделок на 41 082 606 917 602.88 сум. Крупнейший покупатель — \"Zoket Invest\" OK (ИНН 983531029), доля 2.34%.\n\n**Показатели 2026 года** (сделки «Исполнен» и «Исполнен(Частично)»):\n- Оборот: 41 082 606 917 602.88 сум\n- Средняя сделка: 510 545 893.00 сум; медианная: 260 435 101.00 сум\n- Активные продавцы: 335; покупатели: 12 328\n- Крупнейший покупатель: \"Zoket Invest\" OK, ИНН 983531029, 1 179 сделок, 962 282 769 617.50 сум, 2.34% оборота\n\n**Сравнение с 2025 годом** (тот же период, 01.01–30.10, те же статусы):\n- Сделки: 80 468 против 83 559 (−3.7%)\n- Оборот: 41 082 606 917 602.88 против 39 697 051 749 030.00 сум (+3.49%)\n- Средняя сделка: +7.47%; медианная: +4.22%\n- Продавцы: +30 (335 против 305); покупатели: −189 (12 328 против 12 517)\n\n**Вопросы:**\n(а) В данных реестра ответа на этот вопрос нет. В реестре нет себестоимости, поэтому валовую прибыль рассчитать нельзя.\n(б) В данных реестра ответа на этот вопрос нет. Суммы НДС в сделках нет; есть только признак плательщика НДС у участников.\n(в) В данных реестра ответа на этот вопрос нет. Прогнозов в реестре нет, а данные заканчиваются 30.10.2026.\n\nПримечание: в 2026 году также есть незавершённые сделки (Оплачен, Заключен, Ждёт оплату, Новый, Не подписан) и отменённые (Аннулирован(Не оплачен)). В оборот они не входят.\n\nОснование: deals_enriched; фильтры: deal_date 01.01.2026–30.10.2026 и 01.01.2025–30.10.2025, deal_state IN ('Исполнен','Исполнен(Частично)'), отмена и незавершённые исключены; сравнение по ИНН покупателя и продавца; строк: 80 468 (2026), 83 559 (2025); сумма в UZS по sum_uzs.",
+   "sql": [
+    "SELECT deal_state, COUNT(*) AS deals, ROUND(SUM(sum_uzs), 2) AS sum_uzs FROM deals_enriched WHERE deal_date >= DATE '2026-01-01' AND deal_date <= DATE '2026-10-30' GROUP BY deal_state ORDER BY deals DESC",
+    "WITH c AS (SELECT * FROM deals_enriched WHERE deal_date >= DATE '2026-01-01' AND deal_date <= DATE '2026-10-30' AND deal_state IN ('Исполнен','Исполнен(Частично)')) SELECT COUNT(*) AS deals, ROUND(SUM(sum_uzs),2) AS turnover_uzs, ROUND(AVG(sum_uzs),2) AS avg_uzs, ROUND(MEDIAN(sum_uzs),2) AS median_uzs, COUNT(DISTINCT seller_inn) AS sellers, COUNT(DISTINCT buyer_inn) AS buyers FROM c",
+    "WITH c AS (SELECT * FROM deals_enriched WHERE deal_date >= DATE '2025-01-01' AND deal_date <= DATE '2025-10-30' AND deal_state IN ('Исполнен','Исполнен(Частично)')) SELECT COUNT(*) AS deals, ROUND(SUM(sum_uzs),2) AS turnover_uzs, ROUND(AVG(sum_uzs),2) AS avg_uzs, ROUND(MEDIAN(sum_uzs),2) AS median_uzs, COUNT(DISTINCT seller_inn) AS sellers, COUNT(DISTINCT buyer_inn) AS buyers FROM c",
+    "WITH c AS (SELECT * FROM deals_enriched WHERE deal_date >= DATE '2026-01-01' AND deal_date <= DATE '2026-10-30' AND deal_state IN ('Исполнен','Исполнен(Частично)')), tot AS (SELECT SUM(sum_uzs) AS t FROM c), b AS (SELECT buyer_inn, MAX(buyer_name) AS buyer_name, SUM(sum_uzs) AS s, COUNT(*) AS n FROM c GROUP BY buyer_inn) SELECT buyer_inn, buyer_name, ROUND(s,2) AS sum_uzs, n AS deals, ROUND(100.0 * s / NULLIF((SELECT t FROM tot),0), 2) AS share_pct FROM b ORDER BY s DESC LIMIT 5",
+    "WITH y26 AS (SELECT COUNT(*) AS n, SUM(sum_uzs) AS t, AVG(sum_uzs) AS a, MEDIAN(sum_uzs) AS m, COUNT(DISTINCT seller_inn) AS s, COUNT(DISTINCT buyer_inn) AS b FROM deals_enriched WHERE deal_date >= DATE '2026-01-01' AND deal_date <= DATE '2026-10-30' AND deal_state IN ('Исполнен','Исполнен(Частично)')), y25 AS (SELECT COUNT(*) AS n, SUM(sum_uzs) AS t, AVG(sum_uzs) AS a, MEDIAN(sum_uzs) AS m, COUNT(DISTINCT seller_inn) AS s, COUNT(DISTINCT buyer_inn) AS b FROM deals_enriched WHERE deal_date >= DATE '2025-01-01' AND deal_date <= DATE '2025-10-30' AND deal_state IN ('Исполнен','Исполнен(Частично)')) SELECT ROUND(100.0*(y26.n-y25.n)/y25.n,2) AS deals_pct, ROUND(100.0*(y26.t-y25.t)/y25.t,2) AS turnover_pct, ROUND(100.0*(y26.a-y25.a)/y25.a,2) AS avg_pct, ROUND(100.0*(y26.m-y25.m)/y25.m,2) AS median_pct, y26.s-y25.s AS sellers_diff, y26.b-y25.b AS buyers_diff FROM y26, y25"
+   ],
+   "tables": [
+    "deals_enriched"
+   ],
+   "tool_calls": 5,
+   "rows": 16,
+   "usage": {
+    "prompt_tokens": 23273,
+    "completion_tokens": 4951,
+    "total_tokens": 28224
+   },
+   "latency": 20.39,
+   "model": "claude-haiku-5-5",
+   "guardrail_ok": true,
+   "regenerated": false,
+   "no_answer": true,
+   "guardrail_notes": [],
+   "scored": [
+    {
+     "anchor": "Q10_n",
+     "expected": 99306,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q10_tln",
+     "expected": 52.048,
+     "unit": "trln UZS",
+     "tol": 0.01,
+     "matched": false
+    },
+    {
+     "anchor": "Q10_avg",
+     "expected": 524122391.17,
+     "unit": "UZS",
+     "tol": 1000,
+     "matched": false
+    },
+    {
+     "anchor": "Q10_median",
+     "expected": 274416280.91,
+     "unit": "UZS",
+     "tol": 1000,
+     "matched": false
+    },
+    {
+     "anchor": "Q10_sellers",
+     "expected": 335,
+     "unit": "companies",
+     "tol": 0,
+     "matched": true
+    },
+    {
+     "anchor": "Q10_buyers",
+     "expected": 12878,
+     "unit": "companies",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q10_top1_bn",
+     "expected": 1383.34,
+     "unit": "bn UZS",
+     "tol": 1.0,
+     "matched": false
+    },
+    {
+     "anchor": "Q10_top1_share",
+     "expected": 2.6578,
+     "unit": "%",
+     "tol": 0.01,
+     "matched": false
+    },
+    {
+     "anchor": "Q10_top10_share",
+     "expected": 8.1233,
+     "unit": "%",
+     "tol": 0.02,
+     "matched": false
+    },
+    {
+     "anchor": "Q10_ytd25_n",
+     "expected": 89786,
+     "unit": "deals",
+     "tol": 0,
+     "matched": false
+    },
+    {
+     "anchor": "Q10_ytd25_tln",
+     "expected": 42.627,
+     "unit": "trln UZS",
+     "tol": 0.01,
+     "matched": false
+    },
+    {
+     "anchor": "Q10_chg_count",
+     "expected": 10.603,
+     "unit": "%",
+     "tol": 0.01,
+     "matched": false
+    },
+    {
+     "anchor": "Q10_chg_value",
+     "expected": 22.1023,
+     "unit": "%",
+     "tol": 0.02,
+     "matched": false
+    }
+   ],
+   "matched": 1,
+   "total": 13
+  }
+ ],
+ "totals": {
+  "cases": 10,
+  "anchors": 124,
+  "matched": 58
+ }
+}
