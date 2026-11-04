@@ -131,6 +131,23 @@ def test_authorization_header_and_configured_flag() -> None:
     assert unconfigured.configured is False
 
 
+def test_anthropic_haiku_omits_temperature() -> None:
+    client = LLMClient(
+        api_key="test-key",
+        base_url="https://api.anthropic.com/v1",
+        model="claude-haiku-5-5",
+        reasoning_effort="",
+    )
+    payload = client._build_payload([{"role": "user", "content": "hi"}])
+    assert "temperature" not in payload
+
+
+def test_non_anthropic_payload_keeps_temperature() -> None:
+    client = make_client()
+    payload = client._build_payload([{"role": "user", "content": "hi"}])
+    assert payload["temperature"] == 0.0
+
+
 def test_payload_includes_tools_and_tool_choice() -> None:
     client = make_client()
     tools = [{"type": "function", "function": {"name": "run_sql"}}]

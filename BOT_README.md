@@ -82,24 +82,24 @@ to git. Rebuild it on every machine or server that runs the bot.
 ## Configuration
 
 All settings live in `.env` (see `.env.dist` for the full template). The template
-is preconfigured for Google Gemini 3.8 Flash; replace the `LLM_*` lines to use a
-different OpenAI-compatible provider.
+is preconfigured for Anthropic Claude Haiku 5.5; replace the `LLM_*` lines to use
+a different OpenAI-compatible provider.
 
 | Variable | Required | Default | Purpose |
 |---|---|---|---|
 | `BOT_TOKEN` | yes | — | Telegram bot token from @BotFather |
 | `LLM_API_KEY` | yes | — | API key of the OpenAI-compatible provider |
-| `LLM_MODEL` | yes | `gemini-3.8-flash` | Model name, exactly as the provider expects |
-| `LLM_BASE_URL` | yes | `https://generativelanguage.googleapis.com/v1beta/openai` | Base URL **without** `/chat/completions` |
+| `LLM_MODEL` | yes | `claude-haiku-5-5` | Model name, exactly as the provider expects |
+| `LLM_BASE_URL` | yes | `https://api.anthropic.com/v1` | Base URL **without** `/chat/completions` |
 | `ADMINS` | no | empty | Comma-separated Telegram user IDs for startup/`/health` |
 | `DB_PATH` | no | `data/uzex.duckdb` | Path to the DuckDB file |
 | `SQL_TIMEOUT_SECONDS` | no | `15` | Per-SQL-query timeout |
 | `SQL_MAX_ROWS` | no | `100` | Maximum rows returned by `run_sql` |
-| `LLM_TEMPERATURE` | no | `0` | Keep at 0 for deterministic answers |
+| `LLM_TEMPERATURE` | no | `0` | Used by most providers; omitted automatically for Anthropic 5.5 |
 | `LLM_MAX_TOKENS` | no | `4096` | Maximum answer length |
 | `LLM_TIMEOUT_SECONDS` | no | `60` | Per-request LLM timeout |
 | `LLM_MAX_TOOL_ROUNDS` | no | `6` | Tool-calling iterations per question |
-| `LLM_REASONING_EFFORT` | no | `low` | `low`/`medium`/`high`; Gemini 3.8 Flash: use `low` for speed |
+| `LLM_REASONING_EFFORT` | no | empty | `low`/`medium`/`high` for Gemini; leave empty for Haiku 5.5 |
 | `AGENT_TIMEOUT_SECONDS` | no | `75` | Whole-question budget (hackathon limit is 90 s) |
 | `MAX_HISTORY_TURNS` | no | `8` | Follow-up context messages kept per chat |
 | `HISTORY_TTL_SECONDS` | no | `1800` | Context expires after 30 minutes |
@@ -107,15 +107,19 @@ different OpenAI-compatible provider.
 | `LOG_LEVEL` | no | `INFO` | Console/file log level |
 | `QA_LOG_PATH` | no | `logs/qa.jsonl` | JSONL log of questions/answers (user IDs hashed) |
 
+Anthropic 5.5 models reject the `temperature` parameter; the client detects
+`api.anthropic.com` + a `5-5` model and omits it automatically.
+
 ### LLM provider examples
 
 The client only needs an OpenAI-compatible API with tool calling.
 
 | Provider | `LLM_BASE_URL` | Example `LLM_MODEL` |
 |---|---|---|
+| Anthropic | `https://api.anthropic.com/v1` | `claude-haiku-5-5` |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o-mini`, `gpt-4.1-mini` |
 | Google Gemini | `https://generativelanguage.googleapis.com/v1beta/openai` | `gemini-3.8-flash` (set `LLM_REASONING_EFFORT=low`) |
-| OpenRouter | `https://openrouter.ai/api/v1` | `openai/gpt-4o-mini`, `anthropic/claude-3.5-sonnet` |
+| OpenRouter | `https://openrouter.ai/api/v1` | `anthropic/claude-haiku-5.5`, `openai/gpt-4o-mini` |
 | DeepSeek | `https://api.deepseek.com/v1` | `deepseek-chat` |
 | Groq | `https://api.groq.com/openai/v1` | `llama-3.3-70b-versatile` |
 | Together | `https://api.together.xyz/v1` | `meta-llama/Llama-3.3-70B-Instruct-Turbo` |

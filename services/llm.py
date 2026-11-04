@@ -81,6 +81,7 @@ class LLMClient:
         max_retries: int = config.LLM_MAX_RETRIES,
         extra_headers: dict[str, str] | None = None,
         reasoning_effort: str = config.LLM_REASONING_EFFORT,
+        omit_temperature: bool | None = None,
     ) -> None:
         self.api_key = api_key
         self.base_url = base_url.rstrip("/")
@@ -90,6 +91,12 @@ class LLMClient:
         self.timeout = timeout
         self.max_retries = max(0, max_retries)
         self.reasoning_effort = (reasoning_effort or "").strip().lower()
+        if omit_temperature is None:
+            # Anthropic 5.5 models reject temperature entirely.
+            omit_temperature = (
+                "api.anthropic.com" in self.base_url and "5-5" in self.model
+            )
+        self.omit_temperature = omit_temperature
         self._client: httpx.AsyncClient | None = None
 
         headers = {
@@ -134,10 +141,11 @@ class LLMClient:
         payload: dict[str, Any] = {
             "model": self.model,
             "messages": messages,
-            "temperature": self.temperature if temperature is None else temperature,
             "max_tokens": self.max_tokens if max_tokens is None else max_tokens,
             "stream": False,
         }
+        if not self.omit_temperature:
+            payload["temperature"] = self.temperature if temperature is None else temperature
         if self.reasoning_effort:
             # Gemini 3.8 Flash maps this to its thinking level. Other
             # OpenAI-compatible providers may ignore or reject it, so it is
