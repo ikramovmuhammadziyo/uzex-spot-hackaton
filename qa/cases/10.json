@@ -1,0 +1,171 @@
+{
+  "version": 2,
+  "id": "10",
+  "title": "2026 год к дате: сопоставимость, концентрация, три отказа",
+  "original_question": "Подведите итог 2026 года на текущую дату: число сделок, оборот, средняя и медианная сделка, активные продавцы и покупатели, крупнейший покупатель и его доля. Сравните с 2025 годом — но корректно. Затем ответьте на три вопроса или откажитесь с обоснованием: (а) какова валовая прибыль по сделкам 2025 года, (б) какова общая сумма НДС по сделкам 2025 года, (в) каким будет оборот в 2027 году?",
+  "canonical_question": "Подведите итог 2026 года на текущую дату: число сделок, оборот, средняя и медианная сделка, активные продавцы и покупатели, крупнейший покупатель и его доля. Сравните с 2025 годом — но корректно. Затем ответьте на три вопроса или откажитесь с обоснованием: (а) какова валовая прибыль по сделкам 2025 года, (б) какова общая сумма НДС по сделкам 2025 года, (в) каким будет оборот в 2027 году? Для этого контрольного прогона используйте все состояния, включая аннулированные; суммы называйте стоимостью зарегистрированных сделок, а не реализованным оборотом. Сохраняйте явно запрошенный фильтр по состоянию для отдельных подвыборок.",
+  "metrics": [
+    {
+      "id": "Q10_n",
+      "label": "Q10_n",
+      "entity": "registry",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "deals",
+      "expected": 99306,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q10_n"
+    },
+    {
+      "id": "Q10_tln",
+      "label": "Q10_tln",
+      "entity": "registry",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "trln UZS",
+      "expected": 52.048,
+      "tolerance": 0.01,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q10_tln"
+    },
+    {
+      "id": "Q10_avg",
+      "label": "Q10_avg",
+      "entity": "registry",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "UZS",
+      "expected": 524122391.17,
+      "tolerance": 1000,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q10_avg"
+    },
+    {
+      "id": "Q10_median",
+      "label": "Q10_median",
+      "entity": "registry",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "UZS",
+      "expected": 274416280.91,
+      "tolerance": 1000,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q10_median"
+    },
+    {
+      "id": "Q10_sellers",
+      "label": "Q10_sellers",
+      "entity": "registry",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "companies",
+      "expected": 335,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q10_sellers"
+    },
+    {
+      "id": "Q10_buyers",
+      "label": "Q10_buyers",
+      "entity": "registry",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "companies",
+      "expected": 12878,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q10_buyers"
+    },
+    {
+      "id": "Q10_top1_bn",
+      "label": "Q10_top1_bn",
+      "entity": "registry",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "bn UZS",
+      "expected": 1383.34,
+      "tolerance": 1.0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q10_top1_bn"
+    },
+    {
+      "id": "Q10_top1_share",
+      "label": "Q10_top1_share",
+      "entity": "registry",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "%",
+      "expected": 2.6578,
+      "tolerance": 0.01,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q10_top1_share"
+    },
+    {
+      "id": "Q10_top10_share",
+      "label": "Q10_top10_share",
+      "entity": "registry",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "%",
+      "expected": 8.1233,
+      "tolerance": 0.02,
+      "required": false,
+      "source": "qa/qa_recompute.py:compute/Q10_top10_share"
+    },
+    {
+      "id": "Q10_ytd25_n",
+      "label": "Q10_ytd25_n",
+      "entity": "registry",
+      "period": "2025-01-01/2025-10-30",
+      "basis": "all",
+      "unit": "deals",
+      "expected": 89786,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q10_ytd25_n"
+    },
+    {
+      "id": "Q10_ytd25_tln",
+      "label": "Q10_ytd25_tln",
+      "entity": "registry",
+      "period": "2025-01-01/2025-10-30",
+      "basis": "all",
+      "unit": "trln UZS",
+      "expected": 42.627,
+      "tolerance": 0.01,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q10_ytd25_tln"
+    },
+    {
+      "id": "Q10_chg_count",
+      "label": "Q10_chg_count",
+      "entity": "registry",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "%",
+      "expected": 10.603,
+      "tolerance": 0.01,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q10_chg_count"
+    },
+    {
+      "id": "Q10_chg_value",
+      "label": "Q10_chg_value",
+      "entity": "registry",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "%",
+      "expected": 22.1023,
+      "tolerance": 0.02,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q10_chg_value"
+    }
+  ],
+  "semantic_checks": [
+    "Same calendar YTD window and filters",
+    "Snapshot maturity bias",
+    "Profit/VAT/forecast subparts refused with reasons",
+    "Supported analytics still answered"
+  ]
+}

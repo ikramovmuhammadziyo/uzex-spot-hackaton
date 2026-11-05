@@ -1,0 +1,110 @@
+{
+  "version": 2,
+  "id": "01",
+  "title": "Экспорт 2025 и конвертация по курсу дня сделки",
+  "original_question": "Оцените экспортный сегмент биржи за 2025 год: сколько экспортных сделок, какова их сумма в долларах, сколько это в сумах, какую долю оборота 2025 года это составляет и какой эффективный курс сум/доллар из этого следует? Затем покажите, что получится, если пересчитать весь сегмент по курсу 12 552,58 на 31.12.2025 — какова ошибка в сумах и в процентах?",
+  "canonical_question": "Оцените экспортный сегмент биржи за 2025 год: сколько экспортных сделок, какова их сумма в долларах, сколько это в сумах, какую долю оборота 2025 года это составляет и какой эффективный курс сум/доллар из этого следует? Затем покажите, что получится, если пересчитать весь сегмент по курсу 12 552,58 на 31.12.2025 — какова ошибка в сумах и в процентах? Для этого контрольного прогона используйте все состояния, включая аннулированные; суммы называйте стоимостью зарегистрированных сделок, а не реализованным оборотом. Сохраняйте явно запрошенный фильтр по состоянию для отдельных подвыборок.",
+  "metrics": [
+    {
+      "id": "Q1_2025_export_n",
+      "label": "Q1_2025_export_n",
+      "entity": "export",
+      "period": "2025",
+      "basis": "all",
+      "unit": "deals",
+      "expected": 1367,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q1_2025_export_n"
+    },
+    {
+      "id": "Q1_2025_export_usd",
+      "label": "Q1_2025_export_usd",
+      "entity": "export",
+      "period": "2025",
+      "basis": "all",
+      "unit": "USD",
+      "expected": 220524617.85,
+      "tolerance": 100,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q1_2025_export_usd"
+    },
+    {
+      "id": "Q1_2025_export_uzs",
+      "label": "Q1_2025_export_uzs",
+      "entity": "export",
+      "period": "2025",
+      "basis": "all",
+      "unit": "UZS",
+      "expected": 2740766106533.96,
+      "tolerance": 50000000.0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q1_2025_export_uzs"
+    },
+    {
+      "id": "Q1_share_value_pct",
+      "label": "Q1_share_value_pct",
+      "entity": "export",
+      "period": "2025",
+      "basis": "all",
+      "unit": "%",
+      "expected": 4.8963,
+      "tolerance": 0.02,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q1_share_value_pct"
+    },
+    {
+      "id": "Q1_eff_rate",
+      "label": "Q1_eff_rate",
+      "entity": "export",
+      "period": "2025",
+      "basis": "all",
+      "unit": "UZS/USD",
+      "expected": 12428.3907,
+      "tolerance": 0.5,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q1_eff_rate"
+    },
+    {
+      "id": "Q1_at_ye_rate",
+      "label": "Q1_at_ye_rate",
+      "entity": "export",
+      "period": "2025",
+      "basis": "all",
+      "unit": "UZS",
+      "expected": 2768152907531.55,
+      "tolerance": 50000000.0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q1_at_ye_rate"
+    },
+    {
+      "id": "Q1_error_vs_ye",
+      "label": "Q1_error_vs_ye",
+      "entity": "export",
+      "period": "2025",
+      "basis": "all",
+      "unit": "UZS",
+      "expected": 27386800997.6,
+      "tolerance": 5000000.0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q1_error_vs_ye"
+    },
+    {
+      "id": "Q1_error_pct",
+      "label": "Q1_error_pct",
+      "entity": "export",
+      "period": "2025",
+      "basis": "all",
+      "unit": "%",
+      "expected": 0.9992,
+      "tolerance": 0.01,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q1_error_pct"
+    }
+  ],
+  "semantic_checks": [
+    "Per-deal-date FX only for USD",
+    "Declare gross registry value including cancelled",
+    "Year-end conversion and positive difference"
+  ]
+}

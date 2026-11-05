@@ -1,0 +1,147 @@
+{
+  "version": 2,
+  "id": "08",
+  "title": "Платёжная и поставочная дисциплина",
+  "original_question": "Используя «Срок оплаты» (дней от даты сделки) и «Срок поставки» (дней от даты оплаты), оцените дисциплину: сколько сделок оплачено, сколько оплачено с нарушением срока, каков максимальный разрешённый и фактический срок оплаты; сколько поставлено, сколько поставлено с нарушением, на сколько дней в среднем и максимум, какая стоимость затронута и какая категория хуже всех?",
+  "canonical_question": "Используя «Срок оплаты» (дней от даты сделки) и «Срок поставки» (дней от даты оплаты), оцените дисциплину: сколько сделок оплачено, сколько оплачено с нарушением срока, каков максимальный разрешённый и фактический срок оплаты; сколько поставлено, сколько поставлено с нарушением, на сколько дней в среднем и максимум, какая стоимость затронута и какая категория хуже всех? Для этого контрольного прогона используйте все состояния, включая аннулированные; суммы называйте стоимостью зарегистрированных сделок, а не реализованным оборотом. Сохраняйте явно запрошенный фильтр по состоянию для отдельных подвыборок.",
+  "metrics": [
+    {
+      "id": "Q8_paid",
+      "label": "Q8_paid",
+      "entity": "discipline",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "all",
+      "unit": "deals",
+      "expected": 459563,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q8_paid"
+    },
+    {
+      "id": "Q8_late_pay",
+      "label": "Q8_late_pay",
+      "entity": "discipline",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "all",
+      "unit": "deals",
+      "expected": 0,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q8_late_pay"
+    },
+    {
+      "id": "Q8_pay_max",
+      "label": "Q8_pay_max",
+      "entity": "discipline",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "all",
+      "unit": "days",
+      "expected": 90,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q8_pay_max"
+    },
+    {
+      "id": "Q8_term_pay_max",
+      "label": "Q8_term_pay_max",
+      "entity": "discipline",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "all",
+      "unit": "days",
+      "expected": 90,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q8_term_pay_max"
+    },
+    {
+      "id": "Q8_shipped",
+      "label": "Q8_shipped",
+      "entity": "discipline",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "all",
+      "unit": "deals",
+      "expected": 453709,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q8_shipped"
+    },
+    {
+      "id": "Q8_late_sup",
+      "label": "Q8_late_sup",
+      "entity": "discipline",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "all",
+      "unit": "deals",
+      "expected": 17805,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q8_late_sup"
+    },
+    {
+      "id": "Q8_late_pct",
+      "label": "Q8_late_pct",
+      "entity": "discipline",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "all",
+      "unit": "%",
+      "expected": 3.9243,
+      "tolerance": 0.01,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q8_late_pct"
+    },
+    {
+      "id": "Q8_overrun_avg",
+      "label": "Q8_overrun_avg",
+      "entity": "discipline",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "all",
+      "unit": "days",
+      "expected": 7.9504,
+      "tolerance": 0.01,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q8_overrun_avg"
+    },
+    {
+      "id": "Q8_overrun_max",
+      "label": "Q8_overrun_max",
+      "entity": "discipline",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "all",
+      "unit": "days",
+      "expected": 15,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q8_overrun_max"
+    },
+    {
+      "id": "Q8_late_tln",
+      "label": "Q8_late_tln",
+      "entity": "discipline",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "all",
+      "unit": "trln UZS",
+      "expected": 7.705,
+      "tolerance": 0.01,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q8_late_tln"
+    },
+    {
+      "id": "Q8_late_agri",
+      "label": "Late delivery deal count in product_category Сельскохозяйственная продукция",
+      "entity": "Сельскохозяйственная продукция",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "all",
+      "unit": "deals",
+      "expected": 6633,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q8_late_agri"
+    }
+  ],
+  "semantic_checks": [
+    "Payment deadline measured from deal date",
+    "Delivery deadline measured from payment date",
+    "Affected value and worst category",
+    "No false refusal"
+  ]
+}

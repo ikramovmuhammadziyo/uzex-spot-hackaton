@@ -77,12 +77,20 @@ async def answer_question(message: Message) -> None:
                 "answer": answer.text,
                 "latency": round(answer.latency, 3),
                 "tool_calls": answer.tool_calls,
+                "query_count": answer.query_count,
                 "tables": answer.tables,
                 "sql_queries": answer.sql_queries,
                 "rows": answer.rows,
                 "guardrail_ok": answer.guardrail_ok,
                 "regenerated": answer.regenerated,
                 "no_answer": answer.no_answer,
+                "outcome": answer.outcome,
+                "coverage": answer.coverage,
+                "analysis": answer.analysis,
+                "metrics": answer.metrics,
+                "trace": answer.trace,
+                "cache_hits": answer.cache_hits,
+                "cache_misses": answer.cache_misses,
                 "model": answer.model,
                 "usage": answer.usage,
             }
@@ -91,9 +99,11 @@ async def answer_question(message: Message) -> None:
         logger.warning("agent timeout chat=%s", chat_id)
         log_qa({**log_record, "error": "timeout"})
         await message.answer(TIMEOUT[language], parse_mode=None)
-    except AgentError:
+    except AgentError as exc:
         logger.exception("agent service error chat=%s", chat_id)
-        log_qa({**log_record, "error": "agent_error"})
+        log_qa({**log_record, "error": "agent_error", "outcome": exc.outcome,
+                "trace": getattr(exc, "trace", []), "usage": getattr(exc, "usage", {}),
+                "latency": getattr(exc, "latency", None)})
         await message.answer(SERVICE_UNAVAILABLE[language], parse_mode=None)
     except LLMError:
         logger.exception("LLM error chat=%s", chat_id)

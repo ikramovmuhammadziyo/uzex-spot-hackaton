@@ -5,7 +5,7 @@ import json
 import pytest
 
 from data import config
-from services.agent import Agent
+from services.agent import Agent, AgentError
 from services.database import Database
 from services.llm import LLMResponse
 from services.tools import ToolRunner
@@ -80,7 +80,7 @@ async def test_agent_uses_sql_result(database) -> None:
     assert answer.usage["total_tokens"] == 45
 
 
-async def test_agent_replaces_hallucination_with_no_answer(database) -> None:
+async def test_agent_does_not_disguise_verification_failure_as_no_data(database) -> None:
     llm = FakeLLM(
         [
             tool_call("run_sql", {"query": "SELECT 1 AS n"}),
@@ -90,14 +90,10 @@ async def test_agent_replaces_hallucination_with_no_answer(database) -> None:
     )
     agent = Agent(database, llm, tools=ToolRunner(database))
 
-    answer = await agent.answer("Сколько всего сделок?", "ru")
-
-    assert answer.regenerated is True
-    assert answer.no_answer is True
-    assert answer.text == "В данных реестра ответа на этот вопрос нет."
+    with pytest.raises(AgentError) as error:
+        await agent.answer("Сколько всего сделок?", "ru")
+    assert error.value.outcome == "verification_failed"
     assert len(llm.calls) == 3
-    assert llm.calls[2][-1]["role"] == "user"
-    assert llm.calls[2][-2]["role"] == "assistant"
 
 
 async def test_agent_forces_a_tool_call(database) -> None:
@@ -127,11 +123,10 @@ async def test_tool_error_is_returned_to_model(database) -> None:
     )
     agent = Agent(database, llm, tools=ToolRunner(database))
 
-    answer = await agent.answer("Удали все сделки", "ru")
-
-    assert answer.no_answer is True
+    with pytest.raises(AgentError) as error:
+        await agent.answer("Удали все сделки", "ru")
+    assert error.value.outcome == "execution_failed"
     tool_messages = [message for message in llm.calls[1] if message.get("role") == "tool"]
-    assert tool_messages
     assert "only a single read-only" in tool_messages[0]["content"]
 
 
@@ -171,8 +166,79 @@ async def test_failed_tool_result_is_not_evidence(database) -> None:
     )
     agent = Agent(database, llm, tools=FailingTools())
 
-    answer = await agent.answer("Сколько всего сделок?", "ru")
+    with pytest.raises(AgentError) as error:
+        await agent.answer("Сколько всего сделок?", "ru")
+    assert error.value.outcome == "execution_failed"
 
-    assert answer.regenerated is True
-    assert answer.no_answer is True
-    assert answer.text == "В данных реестра ответа на этот вопрос нет."
+
+async def test_budget_exhaustion_reserves_synthesis(database):
+    class BudgetLLM(FakeLLM):
+        async def chat(self, messages, tools=None, **kwargs):
+            if len(self.calls) == 2:
+                assert tools is None
+            else:
+                assert tools
+            return await super().chat(messages, tools, **kwargs)
+    llm = BudgetLLM([
+        tool_call('run_sql', {'query': 'SELECT COUNT(*) AS n FROM deals'}),
+        tool_call('run_sql', {'query': 'SELECT COUNT(*) AS n FROM deals'}),
+        final('Всего 500 000 сделок.'),
+    ])
+    answer = await Agent(database, llm, max_tool_rounds=2).answer('Сколько сделок?', 'ru')
+    assert answer.outcome == 'answered'
+    assert len(llm.calls) == 3
+    assert answer.cache_hits == 1
+    assert answer.cache_misses == 1
+    assert answer.trace[-1]['phase'] == 'synthesis'
+
+
+async def test_structured_partial_answer_verifies_facts(database):
+    llm = FakeLLM([
+        tool_call('run_sql', {'query': 'SELECT COUNT(*) AS n FROM deals'}),
+        final(json.dumps({'text': 'Всего 500 000 сделок. Прибыль неизвестна.',
+                          'coverage': [{'request': 'count', 'status': 'answered'},
+                                       {'request': 'profit', 'status': 'unavailable', 'reason': 'no costs'}],
+                          'metrics': {}}, ensure_ascii=False)),
+    ])
+    answer = await Agent(database, llm).answer('Сколько сделок и прибыль?', 'ru')
+    assert answer.outcome == 'partial'
+    assert not answer.no_answer
+    assert len(answer.coverage) == 2
+
+
+async def test_cached_result_remains_evidence_in_new_turn(database):
+    runner = ToolRunner(database)
+    llm = FakeLLM([
+        tool_call('run_sql', {'query': 'SELECT 123456 AS total'}), final('123456 сум'),
+        tool_call('run_sql', {'query': 'SELECT 123456 AS total'}), final('123456 сум'),
+    ])
+    agent = Agent(database, llm, runner)
+    assert (await agent.answer('Сумма?', 'ru')).cache_misses == 1
+    answer = await agent.answer('Сумма?', 'ru')
+    assert answer.cache_hits == 1
+    assert answer.guardrail_ok
+
+
+async def test_empty_reserved_synthesis_is_execution_failure(database):
+    llm = FakeLLM([tool_call('run_sql', {'query': 'SELECT 1'}),
+                   tool_call('run_sql', {'query': 'SELECT 2'}), final('')])
+    with pytest.raises(AgentError) as error:
+        await Agent(database, llm, max_tool_rounds=2).answer('Count?', 'ru')
+    assert error.value.outcome == 'execution_failed'
+
+
+async def test_truncated_draft_gets_larger_final_budget(database):
+    response = final('{"text": "truncated')
+    response.finish_reason = 'length'
+    class LengthLLM(FakeLLM):
+        async def chat(self, messages, tools=None, **kwargs):
+            if len(self.calls) == 2:
+                assert tools is None
+                assert kwargs['max_tokens'] == config.LLM_FINAL_MAX_TOKENS
+            return await super().chat(messages, tools, **kwargs)
+    llm = LengthLLM([tool_call('run_sql', {'query': 'SELECT 12345 AS amount'}),
+                     response, final('12345 сум')])
+    answer = await Agent(database, llm).answer('Amount?', 'ru')
+    assert answer.guardrail_ok
+    assert not answer.regenerated
+    assert len(llm.calls) == 3

@@ -42,7 +42,8 @@ BN = 1e9
 # ----------------------------------------------------------------------------
 # expected anchors: key -> (expected value, unit, abs tolerance)
 # ----------------------------------------------------------------------------
-from anchors_data import EXPECTED  # noqa: E402  (single source of truth)
+sys.path.insert(0, ROOT)
+from qa.anchors_data import EXPECTED  # noqa: E402  (single source of truth)
 
 
 def money(s: pd.Series) -> pd.Series:

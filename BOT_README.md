@@ -26,13 +26,16 @@ Agent (services/agent.py) ── system prompt + conversation history
         ├── run_sql(query)          read-only DuckDB SELECT, max 100 rows
         ├── search_products(term)   fuzzy product lookup (1 сорт / 1-сорта)
         ├── search_company(term)    company by INN/name, broker by code/name
-        └── usd_rate(date)          exact USD→UZS rate for one date
+        ├── usd_rate(date)          dataset USD→UZS rate for one date
+        ├── registry_audit()        inventory, key integrity, FX calendar coverage
+        ├── region_audit(...)       key joins versus regional-label equality
+        └── mass_ranking(...)       comparable contracted/delivered/remaining mass
         │
         ▼
 Guardrails (services/guardrails.py)
-  every significant number/date/INN/broker code/company name must appear in a
-  tool result from this turn → otherwise one regeneration → otherwise the
-  exact no-answer sentence
+  numeric/date/identifier/name evidence checks, including Decimal display rounding
+  → one repair → explicit verification error if still unsupported
+  Tool-budget exhaustion reserves a final synthesis call; mixed answers retain supported parts.
         │
         ▼
 Answer + evidence line ("Основание" / "Asos")
@@ -132,7 +135,8 @@ LLM_EXTRA_HEADERS={"HTTP-Referer":"https://github.com/ikramovmuhammadziyo/uzex-s
 ```
 
 Use a model that reliably supports **function/tool calling**. Small models that
-ignore tools will trigger the forced-tool retry and then the no-answer sentence.
+ignore tools trigger a forced-tool retry. Execution or verification failures produce a
+service-error response, rather than a claim that the registry lacks the answer.
 
 ## Bot commands
 
@@ -237,7 +241,7 @@ the full path to `.venv\Scripts\python.exe`.
 | `LLM_API_KEY is not configured` | Fill `LLM_API_KEY` in `.env` |
 | HTTP 401 from the LLM | Wrong API key for the selected provider |
 | HTTP 404 from the LLM | Wrong `LLM_BASE_URL` or model name; base URL must end at `/v1`, not `/chat/completions` |
-| Bot replies with the no-answer sentence too often | Model is not calling tools, or guardrails reject its draft; check `logs/bot.log` and try a stronger tool-calling model |
+| Bot returns a verification/service error | Check `outcome`, tool trace and rejected values in logs; tool and verification failures are distinct from absent data |
 | `query timed out` | Narrow the SQL/period; the DB is 500k deals |
 | Answers in the wrong language | Use `/lang ru` or `/lang uz` to pin the language |
 | `TelegramConflictError` | Another bot instance is polling with the same token |
@@ -246,5 +250,25 @@ the full path to `.venv\Scripts\python.exe`.
 
 - `logs/bot.log` — rotating application log (5 MB × 5).
 - `logs/qa.jsonl` — one JSON object per question: language, latency, tool calls,
-  tables, SQL, row counts, guardrail status. Telegram user IDs are hashed.
+  tables, SQL, row counts, guardrail status, outcome, declared coverage, tool trace and
+  cache hit/miss counts. Telegram user IDs are hashed.
 - `.env` and the DuckDB file are git-ignored. Never commit real API keys.
+
+## Pipeline verification and caching
+
+The internal synthesis JSON is parsed before rendering; users see only its text.
+Coverage is a model declaration and still needs semantic evaluation. Optional metric
+bindings reference successful tool-result cells; numeric QA scores do not certify prose.
+`LLM_MAX_TOOL_ROUNDS` bounds exploration, with a separate final synthesis call.
+`LLM_FINAL_MAX_TOKENS` (default 8192) permits a complete multi-part final answer;
+truncated drafts are finalized without repeating successful SQL.
+
+`ToolRunner` caches successful deterministic results in a process-local LRU, including
+exact arguments, row limit and connected dataset generation in the key. Defaults:
+`TOOL_CACHE_ENTRIES=256`, `TOOL_CACHE_BYTES=8388608`. Set entries to zero to disable.
+Unknown/volatile SQL functions bypass caching. Failures and model answers are not cached.
+Cached rows enter current-turn verification normally. Replacing the DuckDB file requires
+reconnecting; a changed snapshot cannot silently serve an old cache entry.
+
+See [the implementation plan](plan/10_eval_failure_remediation.md) and
+[QA execution instructions](qa/README.md).

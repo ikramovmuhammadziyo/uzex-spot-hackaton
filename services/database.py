@@ -37,6 +37,7 @@ class Database:
         self._connection: Any | None = None
         self._lock = threading.Lock()
         self._error: str | None = None
+        self._generation: str | None = None
 
     # ------------------------------------------------------------------
     # Lifecycle
@@ -71,11 +72,28 @@ class Database:
                 connection.execute("PRAGMA memory_limit='2GB'")
             except Exception:
                 pass
+            self._generation = self._file_generation()
             self._connection = connection
             self._error = None
         except Exception as exc:
             self._error = str(exc)
             raise DatabaseError(f"cannot open {self.path}: {exc}") from exc
+
+    def _file_generation(self) -> str:
+        stat = self.path.stat()
+        return f"{self.path.resolve()}:{stat.st_dev}:{stat.st_ino}:{stat.st_size}:{stat.st_mtime_ns}"
+
+    @property
+    def dataset_version(self) -> str:
+        if not self.available:
+            raise DatabaseError("database is not connected")
+        try:
+            current = self._file_generation()
+        except OSError as exc:
+            raise DatabaseError("database snapshot is unavailable; reconnect required") from exc
+        if current != self._generation:
+            raise DatabaseError("database snapshot changed; reconnect required")
+        return current
 
     def close(self) -> None:
         connection, self._connection = self._connection, None
@@ -99,6 +117,7 @@ class Database:
         if self._connection is None:
             raise DatabaseError(self._error or "database is not connected")
 
+        self.dataset_version  # reject replacement of the connected immutable snapshot
         loop = asyncio.get_running_loop()
         future = loop.run_in_executor(None, self._execute, sql, params, max_rows)
         try:

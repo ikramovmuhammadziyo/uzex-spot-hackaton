@@ -1,0 +1,112 @@
+{
+  "version": 2,
+  "id": "04",
+  "title": "Частичная поставка: недопоставленный объём и стоимость",
+  "original_question": "Состояние «Исполнен(Частично)» означает, что покупатель оплатил, а товар поставлен лишь частично. Оцените этот хвост: сколько сделок, сколько лотов и сколько физических единиц не поставлено, сколько это стоит в сумах по цене сделки за единицу, каков совокупный коэффициент поставки, на какую категорию товара приходится основная часть и какая отдельная сделка даёт наибольший недопоставленный объём?",
+  "canonical_question": "Состояние «Исполнен(Частично)» означает, что покупатель оплатил, а товар поставлен лишь частично. Оцените этот хвост: сколько сделок, сколько лотов и сколько физических единиц не поставлено, сколько это стоит в сумах по цене сделки за единицу, каков совокупный коэффициент поставки, на какую категорию товара приходится основная часть и какая отдельная сделка даёт наибольший недопоставленный объём? Физические итоги давайте отдельно по совместимым единицам. Для крупнейшей отдельной сделки сравните оставшуюся массу в тоннах (килограммы / 1000 и тонны); остальные размерности с массой не сравнивайте. Выборка только «Исполнен(Частично)», коэффициент по лотам подпишите как взвешенный по лотам.",
+  "metrics": [
+    {
+      "id": "Q4_deals",
+      "label": "Q4_deals",
+      "entity": "partial_delivery",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "custom",
+      "unit": "deals",
+      "expected": 22648,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q4_deals"
+    },
+    {
+      "id": "Q4_und_lots",
+      "label": "Q4_und_lots",
+      "entity": "partial_delivery",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "custom",
+      "unit": "lots",
+      "expected": 151667030,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q4_und_lots"
+    },
+    {
+      "id": "Q4_und_vol",
+      "label": "Q4_und_vol",
+      "entity": "partial_delivery",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "custom",
+      "unit": "units",
+      "expected": 172439661,
+      "tolerance": 0,
+      "required": false,
+      "source": "qa/qa_recompute.py:compute/Q4_und_vol"
+    },
+    {
+      "id": "Q4_tln",
+      "label": "Q4_tln",
+      "entity": "partial_delivery",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "custom",
+      "unit": "trln UZS",
+      "expected": 3.777,
+      "tolerance": 0.01,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q4_tln"
+    },
+    {
+      "id": "Q4_fill_pct",
+      "label": "Q4_fill_pct",
+      "entity": "partial_delivery",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "custom",
+      "unit": "%",
+      "expected": 62.1046,
+      "tolerance": 0.02,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q4_fill_pct"
+    },
+    {
+      "id": "Q4_agri_tln",
+      "label": "Undelivered UZS value in product_category Сельскохозяйственная продукция",
+      "entity": "Сельскохозяйственная продукция",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "custom",
+      "unit": "trln UZS",
+      "expected": 1.938,
+      "tolerance": 0.01,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q4_agri_tln"
+    },
+    {
+      "id": "Q4_max_und_lots",
+      "label": "Q4_max_und_lots",
+      "entity": "partial_delivery",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "custom",
+      "unit": "lots",
+      "expected": 302376,
+      "tolerance": 0,
+      "required": false,
+      "source": "qa/qa_recompute.py:compute/Q4_max_und_lots"
+    },
+    {
+      "id": "Q4_max_und_mass_t",
+      "label": "Largest remaining mass at one partially delivered deal, normalized kg/1000 or tonnes",
+      "entity": "partial_delivery",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "custom",
+      "unit": "tonnes",
+      "expected": 2980,
+      "tolerance": 0.001,
+      "required": true,
+      "source": "qa/recompute_variants.py:compute_variants/Q4_max_und_mass_t"
+    }
+  ],
+  "semantic_checks": [
+    "Remaining quantities separated by compatible dimensions",
+    "No heterogeneous grand total",
+    "Largest physical backlog has declared unit",
+    "Fill ratio labelled lot-weighted",
+    "Monetary backlog in UZS"
+  ]
+}

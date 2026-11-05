@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import datetime
 import json
+import hashlib
 import logging
 import os
 import re
@@ -197,87 +198,30 @@ CASES = [
     ),
 ]
 
-# ---------------------------------------------------------------------------
-# number extraction
-# ---------------------------------------------------------------------------
-SCALES = {
-    "трлн": 1e12, "trln": 1e12, "trillion": 1e12, "трлн.": 1e12,
-    "млрд": 1e9, "bn": 1e9, "billion": 1e9, "млрд.": 1e9,
-    "млн": 1e6, "mln": 1e6, "million": 1e6, "млн.": 1e6,
-    "тыс": 1e3, "тыс.": 1e3, "k": 1e3,
-}
-NUM_RE = re.compile(
-    r"(?<![\w.])(-?\d[\d\u00a0\u2009 ]*(?:[.,]\d+)?)\s*(%|трлн\.?|млрд\.?|млн\.?|тыс\.?|trln|bn|mln|трлн|млрд|млн|тыс)?",
-    re.IGNORECASE,
-)
+# Versioned contracts bind each metric to a period, basis, entity, and unit.
+from qa.scoring import score_metric
 
 
-def parse_number(raw: str) -> float | None:
-    s = raw.replace("\u00a0", "").replace("\u2009", "").replace(" ", "").strip()
-    s = s.rstrip(".,")
-    if not s:
-        return None
-    if re.fullmatch(r"-?\d{1,3}(,\d{3})+(\.\d+)?", s):
-        s = s.replace(",", "")
-    elif re.fullmatch(r"-?\d{1,3}(\.\d{3})+(,\d+)?", s):
-        s = s.replace(".", "").replace(",", ".")
-    else:
-        s = s.replace(",", ".")
-    try:
-        return float(s)
-    except ValueError:
-        return None
-
-
-def extract_numbers(text: str) -> list[tuple[float, float]]:
-    """[(absolute_value, scale_applied)] for every number in the text."""
-
-    out: list[tuple[float, float]] = []
-    for m in NUM_RE.finditer(text):
-        val = parse_number(m.group(1))
-        if val is None:
-            continue
-        unit = (m.group(2) or "").lower().strip(".")
-        scale = 1.0
-        if unit == "%":
-            scale = 1.0
-        elif unit in SCALES:
-            scale = SCALES[unit]
-        out.append((val * scale, scale))
-    return out
-
-
-def fmt(value: float, unit: str) -> str:
-    return f"{value:,.4f} {unit}".replace(",", " ")
-
-
-def match_anchor(key: str, text: str) -> tuple[bool, str]:
-    expected, unit, tol = EXPECTED[key]
-    nums = extract_numbers(text)
-    rel = max(tol, abs(expected) * 0.005) if tol else 0.0
-    hits = []
-    for absval, scale in nums:
-        if unit in {"trln UZS", "bn UZS"}:
-            exp_abs = expected * (1e12 if unit.startswith("trln") else 1e9)
-            if abs(absval - exp_abs) <= rel * (1e12 if unit.startswith("trln") else 1e9):
-                hits.append(absval)
-        elif unit == "%":
-            # percentage may be written as 4.9 % or as a bare number near "%"
-            if abs(absval - expected) <= max(rel, 0.05):
-                hits.append(absval)
-        elif unit in {"UZS", "USD", "UZS/USD"}:
-            if abs(absval - expected) <= max(rel, abs(expected) * 0.005):
-                hits.append(absval)
-        else:  # counts
-            if abs(absval - expected) <= max(tol, 0.0001):
-                hits.append(absval)
-    return (bool(hits), fmt(expected, unit) if hits else "")
+def evaluation_question(contract: dict, original: bool = False) -> str:
+    question = contract["original_question" if original else "canonical_question"]
+    if original:
+        return question
+    bindings = [{k: metric[k] for k in ("id", "label", "entity", "period", "basis", "unit")}
+                for metric in contract["metrics"] if metric["required"]]
+    return question + (
+        "\nInternal evaluation metadata: return these metric IDs in the JSON metrics map, "
+        "with exact SQL source-cell references. Do not put IDs in user-facing text. "
+        "Use exact raw cell values and their own units (UZS cells may use UZS even when the "
+        "preferred display unit is trln UZS). Never label an unscaled UZS cell as trillions. "
+        "No expected values are supplied.\n"
+        + json.dumps(bindings, ensure_ascii=False)
+    )
 
 
 # ---------------------------------------------------------------------------
 # run
 # ---------------------------------------------------------------------------
-async def main(selected: list[str]) -> int:
+async def main(selected: list[str], *, original: bool = False) -> int:
     db = Database(config.DB_PATH)
     db.connect()
     llm = LLMClient()
@@ -296,11 +240,18 @@ async def main(selected: list[str]) -> int:
     logging.getLogger("services.agent").setLevel(logging.INFO)
 
     results = []
-    out = ROOT / "qa" / "eval_results.json"
+    run_id = datetime.datetime.now(datetime.timezone.utc).strftime("%Y%m%dT%H%M%S%fZ")
+    out = ROOT / "qa" / "runs" / run_id / "eval_results.json"
+    out.parent.mkdir(parents=True, exist_ok=False)
 
     def dump() -> None:
         payload = {
-            "run_at": datetime.datetime.now().isoformat(timespec="seconds"),
+            "run_at": datetime.datetime.now(datetime.timezone.utc).isoformat(timespec="seconds"),
+            "run_id": run_id,
+            "contract_version": 2,
+            "mode": "original_ambiguous" if original else "canonical",
+            "semantic_verdict": "needs_review",
+            "dataset_version": db.dataset_version,
             "model": next((r.get("model") for r in results if r.get("model")), config.LLM_MODEL),
             "base_url": config.LLM_BASE_URL,
             "cases": results,
@@ -317,15 +268,22 @@ async def main(selected: list[str]) -> int:
             continue
         print(f"[{case['id']}] {case['title']}", flush=True)
         notes.clear()
-        entry = dict(id=case["id"], title=case["title"], question=case["question"], anchors=case["anchors"])
+        contract = json.loads((ROOT / "qa" / "cases" / f"{case['id']}.json").read_text())
+        question = evaluation_question(contract, original)
+        entry = dict(id=case["id"], title=case["title"], question=question,
+                     anchors=[m["id"] for m in contract["metrics"] if m["required"]], semantic_checks=contract["semantic_checks"],
+                     semantic_verdict="needs_review", contract=contract,
+                     contract_fingerprint=hashlib.sha256(json.dumps(contract, sort_keys=True,
+                         ensure_ascii=False).encode()).hexdigest())
         try:
-            answer = await agent.answer(case["question"], "ru")
+            answer = await agent.answer(question, "ru")
             entry.update(
-                ok=True,
+                ok=answer.guardrail_ok and answer.outcome in {"answered", "partial"},
                 text=answer.text,
                 sql=answer.sql_queries,
                 tables=answer.tables,
                 tool_calls=answer.tool_calls,
+                query_count=answer.query_count,
                 rows=answer.rows,
                 usage=answer.usage,
                 latency=round(answer.latency, 2),
@@ -333,22 +291,35 @@ async def main(selected: list[str]) -> int:
                 guardrail_ok=answer.guardrail_ok,
                 regenerated=answer.regenerated,
                 no_answer=answer.no_answer,
+                outcome=answer.outcome,
+                coverage=answer.coverage,
+                analysis=answer.analysis,
+                metrics=answer.metrics,
+                evidence=answer.evidence,
+                trace=answer.trace,
+                cache_hits=answer.cache_hits,
+                cache_misses=answer.cache_misses,
             )
             print(f"    {len(answer.text)} chars, tools={answer.tool_calls}, "
                   f"tokens={answer.usage.get('total_tokens')}, {answer.latency:.1f}s", flush=True)
         except Exception as exc:  # noqa: BLE001
-            entry.update(ok=False, error=f"{type(exc).__name__}: {exc}", text="")
+            entry.update(ok=False, error=f"{type(exc).__name__}: {exc}", text="",
+                         outcome=getattr(exc, "outcome", "execution_failed"),
+                         trace=getattr(exc, "trace", []), evidence=getattr(exc, "evidence", []),
+                         rejected_draft=getattr(exc, "draft", ""), sql=getattr(exc, "sql_queries", []),
+                         usage=getattr(exc, "usage", {}), latency=getattr(exc, "latency", None),
+                         tool_calls=getattr(exc, "tool_calls", 0), cache_hits=getattr(exc, "cache_hits", 0),
+                         cache_misses=getattr(exc, "cache_misses", 0))
             print(f"    ERROR {entry['error']}", flush=True)
 
         entry["guardrail_notes"] = list(notes)
-        scored = []
-        for key in case["anchors"]:
-            try:
-                hit, _ = match_anchor(key, entry.get("text") or "")
-            except KeyError:
-                hit = False
-            scored.append({"anchor": key, "expected": EXPECTED[key][0], "unit": EXPECTED[key][1],
-                           "tol": EXPECTED[key][2], "matched": hit})
+        # Original ambiguous questions need a declared-basis human review; never
+        # pick the expected basis opportunistically or score unrelated prose digits.
+        scored = [score_metric(metric, entry.get("metrics", {}))
+                  for metric in contract["metrics"] if metric["required"]]
+        if original:
+            for metric in scored:
+                metric.update(matched=False, reason="declared_basis_review_required")
         entry["scored"] = scored
         entry["matched"] = sum(1 for s in scored if s["matched"])
         entry["total"] = len(scored)
@@ -360,9 +331,9 @@ async def main(selected: list[str]) -> int:
     payload = json.loads(out.read_text(encoding="utf-8"))
     print(f"\nwrote {out}")
     print(f"anchors matched: {payload['totals']['matched']}/{payload['totals']['anchors']}")
-    return 0
+    return 0 if all(r["ok"] and (original or r["matched"] == r["total"]) for r in results) else 1
 
 
 if __name__ == "__main__":
     ids = [a for a in sys.argv[1:] if a.isdigit()]
-    raise SystemExit(asyncio.run(main([f"{int(i):02d}" for i in ids])))
+    raise SystemExit(asyncio.run(main([f"{int(i):02d}" for i in ids], original="--original" in sys.argv)))

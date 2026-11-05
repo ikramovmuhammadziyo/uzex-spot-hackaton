@@ -10,6 +10,10 @@ easy to unit-test.
 from __future__ import annotations
 
 import re
+from decimal import Decimal, InvalidOperation
+from datetime import date, timedelta
+
+from .numeric import SCALES, decimal_value, money_scale_from_column, rounded_equal
 from dataclasses import dataclass, field
 
 from .language import UZ, normalize
@@ -23,21 +27,17 @@ def no_answer(language: str) -> str:
 
 
 def is_no_answer(text: str) -> bool:
-    value = normalize(text or "")
-    if not value.strip():
-        return True
-    markers = (
-        "в данных реестра ответа",
-        "в данных нет ответа",
-        "нет данных для ответа",
-        "maʼlumotlar reyestrida bu savolga javob",
-        "ma'lumotlar reyestrida bu savolga javob",
-        "maʼlumotlarda javob yoʻq",
-        "ma'lumotlarda javob yo'q",
-        "reyestrda javob yoʻq",
-        "reyestrda javob yo'q",
+    value = normalize(text or "").strip().rstrip(".! ")
+    return value in {normalize(NO_ANSWER_RU).rstrip(".! "),
+                     normalize(NO_ANSWER_UZ).rstrip(".! ")}
+
+
+def has_partial_refusal(text: str) -> bool:
+    value = normalize(text)
+    return not is_no_answer(text) and any(
+        normalize(marker).rstrip(".") in value
+        for marker in (NO_ANSWER_RU, NO_ANSWER_UZ)
     )
-    return any(marker in value for marker in markers)
 
 
 # ---------------------------------------------------------------------------
@@ -48,11 +48,11 @@ DATE_DMY_RE = re.compile(r"(?<!\d)(\d{1,2})[./](\d{1,2})[./](\d{4})(?!\d)")
 CODE_RE = re.compile(r"(?<![A-Za-z0-9])BK\d{3}(?![A-Za-z0-9])", re.IGNORECASE)
 NUMBER_RE = re.compile(
     r"(?<![\w.,])"
-    r"(?:\d{1,3}(?:[ \u00A0\u202F]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)"
+    r"[+−-]?(?:\d{1,3}(?:[ \u00A0\u202F]\d{3})+(?:[.,]\d+)?|\d+(?:[.,]\d+)?)"
     r"(?![\w])"
 )
 GROUPED_NUMBER_RE = re.compile(
-    r"(?<![\w.,])\d{1,3}(?:[., \u00A0\u202F]\d{3})+(?:[.,]\d+)?(?![\w])"
+    r"(?<![\w.,])[+−-]?\d{1,3}(?:[., \u00A0\u202F]\d{3})+(?:[.,]\d+)?(?![\w])"
 )
 
 
@@ -61,10 +61,15 @@ class Candidate:
     raw: str
     kind: str  # "number" | "date" | "code"
     variants: frozenset[str]
+    scale: Decimal = Decimal(1)
+    start: int = -1
+    end: int = -1
 
 
 def _date_candidate(year: int, month: int, day: int) -> Candidate | None:
-    if not (1 <= month <= 12 and 1 <= day <= 31):
+    try:
+        date(year, month, day)
+    except ValueError:
         return None
     canonical = f"{year:04d}{month:02d}{day:02d}"
     return Candidate(
@@ -75,51 +80,32 @@ def _date_candidate(year: int, month: int, day: int) -> Candidate | None:
 
 
 def number_variants(raw: str) -> frozenset[str]:
-    """Return every plausible interpretation of a formatted number.
+    """Return one canonical decimal interpretation; never strip decimal separators."""
 
-    ``1 234``, ``1,234`` and ``1234`` all share the variant ``1234``; a decimal
-    ``12,5`` also carries ``12.5`` so different formatting styles still match.
-    """
-
-    value = (
-        raw.strip()
-        .replace(" ", "")
-        .replace("\u00a0", "")
-        .replace("\u202f", "")
-        .replace("−", "-")
-    )
-    value = value.strip("+-")
-    if not value:
+    try:
+        return frozenset({str(decimal_value(raw).normalize())})
+    except InvalidOperation:
         return frozenset()
 
-    digits = re.sub(r"\D", "", value)
-    variants: set[str] = set()
-    if digits:
-        variants.add(digits)
-        variants.add(str(int(digits)))
-    variants.add(value)
 
-    if "." in value or "," in value:
-        without_separators = re.sub(r"[.,]", "", value)
-        if without_separators:
-            variants.add(without_separators)
-
-        last_separator = max(value.rfind("."), value.rfind(","))
-        if 0 <= last_separator < len(value) - 1:
-            integer_part = re.sub(r"\D", "", value[:last_separator]) or "0"
-            decimal_part = re.sub(r"\D", "", value[last_separator + 1 :])
-            if decimal_part:
-                decimal = f"{integer_part}.{decimal_part}"
-                variants.add(decimal)
-                trimmed = decimal.rstrip("0").rstrip(".")
-                if trimmed:
-                    variants.add(trimmed)
-
-    return frozenset(item for item in variants if item)
+def _candidate_from_number(raw: str, start: int, end: int) -> Candidate:
+    return Candidate(raw=raw, kind="number", variants=number_variants(raw), start=start, end=end)
 
 
-def _candidate_from_number(raw: str) -> Candidate:
-    return Candidate(raw=raw, kind="number", variants=number_variants(raw))
+def _money_context(text: str, start: int, end: int) -> bool:
+    if re.match(r"\s*(?:сум\b|UZS\b|USD\b|доллар)", text[end:], re.I):
+        return True
+    before = text[:start]
+    lines = before.split("\n")
+    column = lines[-1].count("|")
+    if column:
+        for line in reversed(lines[:-1]):
+            if "|" not in line:
+                break
+            cells = line.split("|")
+            if column < len(cells) and re.search(r"сум|UZS|USD", cells[column], re.I):
+                return True
+    return False
 
 
 def extract_candidates(text: str) -> list[Candidate]:
@@ -152,6 +138,17 @@ def extract_candidates(text: str) -> list[Candidate]:
             mask(match.start(), match.end())
 
     partially_masked = "".join(remaining)
+    for match in re.finditer(r"(?<![\d.])(\d{1,2})\.(\d{1,2})(?![\d.])", partially_masked):
+        day, month = map(int, match.groups())
+        before, after = text[:match.start()], text[match.end():]
+        if not (1 <= day <= 31 and 1 <= month <= 12):
+            continue
+        if (re.search(r"[–—-]\s*$", before) or re.match(r"\s*[–—-]", after)
+                or re.search(r"(?:период|дата|снимка|с|по|на|до|от|from|to)[: ]*\s*$", before, re.I)):
+            candidates.append(Candidate(match.group(0), "date_fragment", frozenset({f"{month:02d}{day:02d}"})))
+            mask(match.start(), match.end())
+
+    partially_masked = "".join(remaining)
     for match in CODE_RE.finditer(partially_masked):
         candidates.append(
             Candidate(raw=match.group(0), kind="code", variants=frozenset({match.group(0).upper()}))
@@ -160,22 +157,37 @@ def extract_candidates(text: str) -> list[Candidate]:
 
     partially_masked = "".join(remaining)
     for match in GROUPED_NUMBER_RE.finditer(partially_masked):
-        candidates.append(_candidate_from_number(match.group(0)))
+        candidates.append(_candidate_from_number(match.group(0), match.start(), match.end()))
         mask(match.start(), match.end())
 
     partially_masked = "".join(remaining)
     for match in NUMBER_RE.finditer(partially_masked):
-        candidates.append(_candidate_from_number(match.group(0)))
+        candidates.append(_candidate_from_number(match.group(0), match.start(), match.end()))
 
-    return candidates
+    # Scale belongs to this number, never to arbitrary digits elsewhere.
+    enriched = []
+    for candidate in candidates:
+        if candidate.kind != "number":
+            enriched.append(candidate)
+            continue
+        tail = text[candidate.end:]
+        scale_match = re.match(r"\s*(трлн|млрд|млн|тыс|trln|bn|mln)\b", tail, re.I)
+        scale = SCALES[scale_match.group(1).lower()] if scale_match else Decimal(1)
+        prefix = text[max(0, candidate.start-30):candidate.start]
+        identifier = bool(re.search(r"(?:№|ИНН|STIR|deal_no\s*=|contract_no\s*=|inn\s*=)\s*$", prefix, re.I))
+        identifier_kind = "inn" if re.search(r"(?:ИНН|STIR)\s*$", prefix, re.I) else "identifier"
+        enriched.append(Candidate(candidate.raw, identifier_kind if identifier else "money"
+                                  if _money_context(text, candidate.start, candidate.end) else "number",
+                                  candidate.variants, scale, candidate.start, candidate.end))
+    return enriched
 
 
 def is_significant(candidate: Candidate) -> bool:
-    """Ignore tiny numbers (1–2 digits) but check counts, sums, years, dates."""
+    """All extracted factual values matter, including small percentages and counts."""
 
     if candidate.kind in {"date", "code"}:
         return True
-    return any(len(re.sub(r"\D", "", value)) >= 3 for value in candidate.variants)
+    return True
 
 
 # ---------------------------------------------------------------------------
@@ -193,6 +205,10 @@ class EvidenceIndex:
 
     def __init__(self) -> None:
         self._variants: set[str] = set()
+        self._numbers: set[Decimal] = set()
+        self._exact_digits: set[str] = set()
+        self.results: list[dict] = []
+        self.requested_years: set[int] = set()
         self._words: set[str] = set()
         self._prefixes: set[str] = set()
         self._normalized_parts: list[str] = []
@@ -220,14 +236,69 @@ class EvidenceIndex:
                     continue
                 # A tool result containing 2024-01-01 also supports the year
                 # 2024, which the answer normally repeats from the question.
-                self._variants.add(candidate.raw[-4:])
-            elif candidate.kind in {"number", "code"}:
+                self._variants.add(candidate.raw[3:5] + candidate.raw[:2])
+                self._variants.add(str(Decimal(candidate.raw[-4:]).normalize()))
+                self._numbers.add(Decimal(candidate.raw[-4:]))
+            elif candidate.kind in {"number", "money", "code"}:
                 if not numbers:
                     continue
             self._variants.update(candidate.variants)
+            raw_digits = re.sub(r"[\s\u00a0\u202f]", "", candidate.raw)
+            if numbers and raw_digits.isdigit():
+                self._exact_digits.add(raw_digits)
+            if candidate.kind in {"number", "money"}:
+                try:
+                    self._numbers.add(decimal_value(candidate.raw) * candidate.scale)
+                except InvalidOperation:
+                    pass
 
     def contains_number(self, candidate: Candidate) -> bool:
-        return bool(candidate.variants & self._variants)
+        if candidate.kind in {"identifier", "inn"}:
+            digits = re.sub(r"\s", "", candidate.raw)
+            return (candidate.kind != "inn" or len(digits) == 9) and digits in self._exact_digits
+        if candidate.kind not in {"number", "money"}:
+            return bool(candidate.variants & self._variants)
+        try:
+            shown = decimal_value(candidate.raw)
+            return any(rounded_equal(source / candidate.scale, shown, allow_integer=candidate.kind == "money") for source in self._numbers)
+        except InvalidOperation:
+            return False
+
+    def add_result(self, payload: dict) -> None:
+        """Retain typed columns/rows and provenance; metadata is not factual evidence."""
+        self.results.append(payload)
+        import json
+        for key in ("rows", "matches", "date", "rate", "available_range"):
+            if key in payload:
+                self.add(json.dumps(payload[key], ensure_ascii=False, default=str))
+        for row in payload.get("rows", []):
+            for column, value in row.items():
+                if value is not None:
+                    try:
+                        self._numbers.add(decimal_value(str(value)))
+                    except InvalidOperation:
+                        pass
+                # Explicit SQL aliases carry display scaling into evidence.
+                scale = money_scale_from_column(column)
+                if scale is not None and value is not None:
+                    try:
+                        self._numbers.add(decimal_value(str(value)) * scale)
+                    except InvalidOperation:
+                        pass
+
+    def add_request(self, question: str) -> None:
+        # User-supplied years identify the request; they are not query-derived facts.
+        self.requested_years.update(int(y) for y in re.findall(r"\b(?:19|20)\d{2}\b", question))
+
+    def add_query_scope(self, query: str) -> None:
+        """Support calendar boundaries without treating them as observed extrema."""
+        self.add(query, numbers=False, dates=True, names=False)
+        for match in re.finditer(r"\bdeal_date\s*<\s*DATE\s*'([0-9-]+)'", query, re.I):
+            try:
+                self.add((date.fromisoformat(match.group(1))-timedelta(days=1)).isoformat(),
+                         numbers=False, names=False)
+            except ValueError:
+                pass
 
     def contains_name(self, name: str) -> bool:
         tokens = _name_tokens(name)
@@ -294,11 +365,36 @@ def verify_answer(answer: str, evidence: EvidenceIndex, language: str) -> Verifi
         return VerificationResult(ok=False, empty=True)
 
     unsupported_numbers: list[str] = []
-    for candidate in extract_candidates(answer):
+    substantive = strip_evidence_lines(answer).replace("**", "").replace("`", "")
+    # List ordinals are formatting, not registry facts.
+    substantive = re.sub(r"(?m)^\s*\d+[.)]\s+", "", substantive)
+    substantive = re.sub(r"(?<!\S)\d+\)(?=\s)", "", substantive)
+    # Check identifiers in citations, but not generated query/row counters.
+    citations = "\n".join(line for line in answer.splitlines()
+                          if re.search(r"(?:deal_no|contract_no|ИНН|№|BK\d{3})", line, re.I)
+                          and line not in substantive)
+    check_text = substantive + "\n" + citations
+    check_text = re.sub(r"(?m)^\s*\d+[.)]\s+", "", check_text)
+    for candidate in extract_candidates(check_text):
         if not is_significant(candidate):
             continue
         if not evidence.contains_number(candidate):
-            unsupported_numbers.append(candidate.raw)
+            # Mathematical unit definitions are not measured registry facts.
+            prefix = check_text[max(0, candidate.start - 80):candidate.start].lower()
+            try:
+                value = decimal_value(candidate.raw) if candidate.kind in {"number", "money"} else None
+            except InvalidOperation:
+                value = None
+            conversion = value == 1000 and bool(re.search(
+                r"(?:/|÷|(?:раз)?дел[а-я]*(?:\s+[^.!?;\n]{0,100})?\s+на)\s*$", prefix))
+            percentage_multiplier = value == 100 and bool(re.search(r"[×*/÷]\s*$", prefix))
+            rate_denominator = value == 1 and bool(re.search(r"(?:UZS|сум)\s+(?:за|per)\s*$", prefix, re.I))
+            following = check_text[candidate.end:candidate.end + 15].lower()
+            requested_year = (value in evidence.requested_years and candidate.kind == "number"
+                              and bool(re.search(r"год|yil|year|период", prefix[-40:])
+                                       or re.match(r"\s*[-–]?\s*(?:год|yil|year)", following)))
+            if not (conversion or percentage_multiplier or rate_denominator or requested_year):
+                unsupported_numbers.append(candidate.raw)
 
     unsupported_names: list[str] = []
     for match in NAME_CONTEXT_RE.finditer(answer):
@@ -366,10 +462,17 @@ def correction_prompt(
     pieces.append(
         "Re-run the necessary tools (SQL, product search, company search, USD rate) and use only exact "
         "values returned by the tools. Do not calculate in your head, do not round unless the SQL did it, "
-        "and do not use outside knowledge. Remove or correct every unsupported value."
+        "and do not use outside knowledge. Remove or correct every unsupported value. "
+        "This is an internal draft: do not mention corrections or a previous answer to the user. "
+        "Revise the complete JSON envelope, preserving coverage and all requested metric IDs. "
+        "Every successful result from every round of this answer remains valid evidence; "
+        "a later SQL query does not invalidate earlier results. Keep already supported sections "
+        "and repair only unsupported claims. Do not label earlier results from this answer as "
+        "a previous run or as provisional."
     )
     pieces.append(
-        "If the data cannot confirm the answer, reply with exactly this sentence and nothing else: "
+        "Answer supported subquestions and identify unavailable subparts. A verification failure "
+        "does not mean data is absent. Use a whole-answer refusal only for an entirely unsupported request: "
         f"{no_answer(language)}"
     )
     return " ".join(pieces)

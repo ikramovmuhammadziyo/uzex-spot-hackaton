@@ -23,6 +23,10 @@ Tables: `deals`, `contracts`, `participants`, `brokers`, `usd_rates`. English sn
 
 Python query results contain `datetime.date` and `decimal.Decimal` values. Convert these to ISO date strings and decimal strings before serializing tool responses to JSON; avoid casting money to binary floats.
 
+`deals.region` is the seller-company region (matching participants by seller INN).
+`contracts.region` is the warehouse region, with Russian rather than Uzbek Latin labels.
+Join by contract number/INN; do not join these region labels directly.
+
 The view includes every recorded deal state. For turnover or completed-deal questions, apply an explicit state filter and describe it in the answer. The CSVs are a snapshot as of 30 October 2026.
 
 Example:

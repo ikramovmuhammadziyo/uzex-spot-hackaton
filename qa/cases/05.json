@@ -1,0 +1,77 @@
+{
+  "version": 2,
+  "id": "05",
+  "title": "Крупнейший физический объём 2026: ловушка единиц",
+  "original_question": "Какой товар в 2026 году имел наибольший физический объём? Назовите тройку лидеров с цифрами, объясните, как именно вы привели их к сопоставимому виду, и скажите, можно ли вообще назвать единую цифру «общий физический объём за 2026 год».",
+  "canonical_question": "Какой товар в 2026 году имел наибольший физический объём? Назовите тройку лидеров с цифрами, объясните, как именно вы привели их к сопоставимому виду, и скажите, можно ли вообще назвать единую цифру «общий физический объём за 2026 год». Для этого контрольного прогона включите все состояния, включая аннулированные, и все формы контрактов. Рейтинг — по массе с группировкой tnved_code, без дополнительных денежных показателей.",
+  "metrics": [
+    {
+      "id": "Q5_wheat_t",
+      "label": "Q5_wheat_t",
+      "entity": "100199",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "tonnes",
+      "expected": 2330761,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q5_wheat_t"
+    },
+    {
+      "id": "Q5_cement_t",
+      "label": "Q5_cement_t",
+      "entity": "252329",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "tonnes",
+      "expected": 1367297,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q5_cement_t"
+    },
+    {
+      "id": "Q5_cotton_t",
+      "label": "Q5_cotton_t",
+      "entity": "520100",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "tonnes",
+      "expected": 1331974.8,
+      "tolerance": 0.5,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q5_cotton_t"
+    },
+    {
+      "id": "Q5_cotton_kg",
+      "label": "Q5_cotton_kg",
+      "entity": "520100",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "kg",
+      "expected": 1331974809,
+      "tolerance": 0,
+      "required": false,
+      "source": "qa/qa_recompute.py:compute/Q5_cotton_kg"
+    },
+    {
+      "id": "Q5_units_2026",
+      "label": "Q5_units_2026",
+      "entity": "all_units",
+      "period": "2026-01-01/2026-10-30",
+      "basis": "all",
+      "unit": "units",
+      "expected": 7,
+      "tolerance": 0,
+      "required": false,
+      "source": "qa/qa_recompute.py:compute/Q5_units_2026"
+    }
+  ],
+  "semantic_checks": [
+    "TN VED commodity grouping",
+    "kg divided by 1000, tonnes unchanged",
+    "Top three mass-compatible products",
+    "No density assumptions",
+    "No single heterogeneous total",
+    "2026 snapshot coverage"
+  ]
+}

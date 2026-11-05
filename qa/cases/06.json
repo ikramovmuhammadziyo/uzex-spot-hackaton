@@ -1,0 +1,170 @@
+{
+  "version": 2,
+  "id": "06",
+  "title": "Рейтинг брокеров 2025: количество против суммы",
+  "original_question": "Постройте рейтинг брокеров со стороны продавца за 2025 год. Кто входит в топ-5 по сумме в сумах (с количеством сделок и долями), кто внизу, и совпадает ли лидер по количеству сделок с лидером по сумме? Какие брокеры вообще ни разу не выступали за продавца и сколько из 120 контор были активны на стороне продавца в 2025 году?",
+  "canonical_question": "Постройте рейтинг брокеров со стороны продавца за 2025 год. Кто входит в топ-5 по сумме в сумах (с количеством сделок и долями), кто внизу, и совпадает ли лидер по количеству сделок с лидером по сумме? Какие брокеры вообще ни разу не выступали за продавца и сколько из 120 контор были активны на стороне продавца в 2025 году? Для этого контрольного прогона используйте все состояния, включая аннулированные; суммы называйте стоимостью зарегистрированных сделок, а не реализованным оборотом. Сохраняйте явно запрошенный фильтр по состоянию для отдельных подвыборок.",
+  "metrics": [
+    {
+      "id": "Q6_bk111_n",
+      "label": "Q6_bk111_n",
+      "entity": "BK111",
+      "period": "2025",
+      "basis": "all",
+      "unit": "deals",
+      "expected": 4128,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q6_bk111_n"
+    },
+    {
+      "id": "Q6_bk111_bn",
+      "label": "Q6_bk111_bn",
+      "entity": "BK111",
+      "period": "2025",
+      "basis": "all",
+      "unit": "bn UZS",
+      "expected": 3731.779,
+      "tolerance": 0.5,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q6_bk111_bn"
+    },
+    {
+      "id": "Q6_bk111_share",
+      "label": "Q6_bk111_share",
+      "entity": "BK111",
+      "period": "2025",
+      "basis": "all",
+      "unit": "%",
+      "expected": 6.6667,
+      "tolerance": 0.01,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q6_bk111_share"
+    },
+    {
+      "id": "Q6_bk106_n",
+      "label": "Q6_bk106_n",
+      "entity": "BK106",
+      "period": "2025",
+      "basis": "all",
+      "unit": "deals",
+      "expected": 3838,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q6_bk106_n"
+    },
+    {
+      "id": "Q6_bk106_bn",
+      "label": "Q6_bk106_bn",
+      "entity": "BK106",
+      "period": "2025",
+      "basis": "all",
+      "unit": "bn UZS",
+      "expected": 3309.5,
+      "tolerance": 0.5,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q6_bk106_bn"
+    },
+    {
+      "id": "Q6_bk102_bn",
+      "label": "Q6_bk102_bn",
+      "entity": "BK102",
+      "period": "2025",
+      "basis": "all",
+      "unit": "bn UZS",
+      "expected": 2276.498,
+      "tolerance": 0.5,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q6_bk102_bn"
+    },
+    {
+      "id": "Q6_bk047_bn",
+      "label": "Q6_bk047_bn",
+      "entity": "BK047",
+      "period": "2025",
+      "basis": "all",
+      "unit": "bn UZS",
+      "expected": 2202.409,
+      "tolerance": 0.5,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q6_bk047_bn"
+    },
+    {
+      "id": "Q6_bk005_n",
+      "label": "Q6_bk005_n",
+      "entity": "BK005",
+      "period": "2025",
+      "basis": "all",
+      "unit": "deals",
+      "expected": 4652,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q6_bk005_n"
+    },
+    {
+      "id": "Q6_bk005_bn",
+      "label": "Q6_bk005_bn",
+      "entity": "BK005",
+      "period": "2025",
+      "basis": "all",
+      "unit": "bn UZS",
+      "expected": 1822.39,
+      "tolerance": 0.5,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q6_bk005_bn"
+    },
+    {
+      "id": "Q6_bk031_n",
+      "label": "Q6_bk031_n",
+      "entity": "BK031",
+      "period": "2025",
+      "basis": "all",
+      "unit": "deals",
+      "expected": 8,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q6_bk031_n"
+    },
+    {
+      "id": "Q6_bk031_bn",
+      "label": "Q6_bk031_bn",
+      "entity": "BK031",
+      "period": "2025",
+      "basis": "all",
+      "unit": "bn UZS",
+      "expected": 0.101,
+      "tolerance": 0.01,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q6_bk031_bn"
+    },
+    {
+      "id": "Q6_never_seller",
+      "label": "Brokers never representing a seller anywhere in the full registry (not inactive in 2025)",
+      "entity": "seller_brokers",
+      "period": "2022-01-03/2026-10-30",
+      "basis": "all",
+      "unit": "brokers",
+      "expected": 4,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q6_never_seller"
+    },
+    {
+      "id": "Q6_active_2025",
+      "label": "Q6_active_2025",
+      "entity": "seller_brokers",
+      "period": "2025",
+      "basis": "all",
+      "unit": "brokers",
+      "expected": 113,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q6_active_2025"
+    }
+  ],
+  "semantic_checks": [
+    "Seller broker is representative, not seller",
+    "Annual activity distinct from never active",
+    "Value leader versus count leader"
+  ]
+}

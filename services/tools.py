@@ -18,7 +18,9 @@ from typing import Any
 from data import config
 
 from .database import Database, DatabaseError
+from .audits import REGISTRY_AUDIT_SQL
 from .language import normalize
+from .tool_cache import ToolCache
 
 logger = logging.getLogger(__name__)
 
@@ -187,14 +189,55 @@ def _rows_as_dicts(columns: list[str], rows: list[list[Any]]) -> list[dict[str, 
     return [dict(zip(columns, row)) for row in rows]
 
 
+# Unknown functions bypass caching rather than accidentally freezing volatile SQL.
+_STABLE_FUNCTIONS = {
+    "count", "sum", "avg", "min", "max", "median", "round", "abs", "nullif",
+    "coalesce", "cast", "try_cast", "date_diff", "datediff", "date_trunc", "extract",
+    "lower", "upper", "replace", "regexp_replace", "length", "concat", "trim",
+    "row_number", "rank", "dense_rank", "lag", "lead", "stddev", "quantile_cont",
+    "filter", "over", "in", "as", "values", "exists", "not", "select",
+}
+
+
+def _cacheable(name: str, arguments: dict[str, Any]) -> bool:
+    if name in {"search_products", "search_company", "usd_rate", "region_audit", "registry_audit", "mass_ranking"}:
+        return True
+    if name != "run_sql":
+        return False
+    statement = validate_readonly_sql(arguments.get("query", ""))
+    if re.search(r"'(?:now|today|tomorrow|yesterday)'", statement, re.I):
+        return False
+    if re.search(r'"[^"\n]+"\s*\(', statement):
+        return False  # quoted function names must not evade the whitelist
+    masked = _mask_sql_literals(statement).lower()
+    if re.search(r"\b(current_date|current_time|current_timestamp|localtimestamp|localtime|session_user|current_user)\b", masked):
+        return False
+    functions = set(re.findall(r"\b([a-z_][a-z_0-9]*)\s*\(", masked))
+    return functions <= _STABLE_FUNCTIONS
+
+
 class ToolRunner:
-    def __init__(self, database: Database, max_rows: int = MAX_ROWS) -> None:
+    def __init__(self, database: Database, max_rows: int = MAX_ROWS, *,
+                 cache_entries: int = config.TOOL_CACHE_ENTRIES,
+                 cache_bytes: int = config.TOOL_CACHE_BYTES) -> None:
         self.database = database
         self.max_rows = max_rows
+        self.cache = ToolCache(cache_entries, cache_bytes)
 
     async def run(self, name: str, arguments: dict[str, Any] | None) -> str:
         arguments = arguments or {}
+        cache_key = None
         try:
+            generation = self.database.dataset_version
+            self.cache.select_generation(generation)
+            if _cacheable(name, arguments):
+                cache_key = json.dumps([generation, name, arguments, self.max_rows],
+                                       sort_keys=True, ensure_ascii=False)
+                cached = self.cache.get(cache_key)
+                if cached is not None:
+                    payload = json.loads(cached)
+                    payload["cache"] = "hit"
+                    return _dumps(payload)
             if name == "run_sql":
                 payload = await self._run_sql(arguments)
             elif name == "search_products":
@@ -203,6 +246,16 @@ class ToolRunner:
                 payload = await self._search_company(arguments)
             elif name == "usd_rate":
                 payload = await self._usd_rate(arguments)
+            elif name == "region_audit":
+                payload = await self._region_audit(arguments)
+            elif name == "mass_ranking":
+                payload = await self._mass_ranking(arguments)
+            elif name == "registry_audit":
+                result = await self.database.query(REGISTRY_AUDIT_SQL, max_rows=1)
+                payload = {"ok": True, "tool": name, "columns": result.columns,
+                           "rows": _rows_as_dicts(result.columns, result.rows),
+                           "row_count": result.row_count, "truncated": False,
+                           "scope": {"basis": "all"}}
             else:
                 raise ToolError(f"unknown tool: {name}")
         except ToolError as exc:
@@ -212,6 +265,9 @@ class ToolRunner:
         except Exception as exc:  # pragma: no cover - defensive
             logger.exception("tool %s failed", name)
             payload = {"ok": False, "tool": name, "error": f"internal tool error: {exc}"}
+        if payload.get("ok") and cache_key is not None:
+            self.cache.put(cache_key, _dumps(payload))
+        payload["cache"] = "miss" if cache_key is not None else "bypass"
         return _dumps(payload)
 
     # ------------------------------------------------------------------
@@ -235,6 +291,93 @@ class ToolRunner:
                 "Aggregate in SQL (COUNT/SUM/AVG/GROUP BY) instead of selecting raw rows."
             )
         return payload
+
+    async def _mass_ranking(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        start = _parse_date(str(arguments.get("start_date", "")))
+        end = _parse_date(str(arguments.get("end_date", "")))
+        if start > end:
+            raise ToolError("start_date must not exceed end_date")
+        basis = arguments.get("basis", "noncancelled")
+        basis_filters = {"all": "TRUE", "noncancelled": "deal_state <> 'Аннулирован(Не оплачен)'",
+                         "completed": "deal_state IN ('Исполнен','Исполнен(Частично)')"}
+        if not isinstance(basis, str) or basis not in basis_filters:
+            raise ToolError("invalid state basis")
+        grouping = arguments.get("grouping", "commodity")
+        if grouping not in ("commodity", "deal"):
+            raise ToolError("grouping must be commodity or deal")
+        key = "tnved_code" if grouping == "commodity" else "deal_no"
+        measure = arguments.get("measure", "contracted")
+        expressions = {"contracted": "quantity*lot", "delivered": "COALESCE(delivered,0)*lot",
+                       "remaining": "(quantity-COALESCE(delivered,0))*lot"}
+        if not isinstance(measure, str) or measure not in expressions:
+            raise ToolError("measure must be contracted, delivered or remaining")
+        states = arguments.get("states", [])
+        known_states = {'Новый','Не подписан','Заключен','Ждёт оплату','Оплачен',
+                        'Исполнен','Исполнен(Частично)','Аннулирован(Не оплачен)'}
+        if not isinstance(states, list) or len(states) > 8 or any(
+                not isinstance(s, str) or s not in known_states for s in states):
+            raise ToolError("states must be a list of registry states")
+        limit = arguments.get("limit", 3)
+        if type(limit) is not int or not 1 <= limit <= 20:
+            raise ToolError("limit must be between 1 and 20")
+        state_filter = " AND deal_state IN (" + ','.join('?' for _ in states) + ')' if states else ''
+        query = f"""
+          WITH mass AS (
+            SELECT {key}, product_name, unit, deal_date, {expressions[measure]} AS units
+            FROM deals_enriched WHERE deal_date >= CAST(? AS DATE) AND deal_date <= CAST(? AS DATE)
+              AND {basis_filters[basis]} {state_filter} AND unit IN ('килограмм','тонна')
+          )
+          SELECT {key}, MIN(product_name) AS sample_label, COUNT(*) AS deals,
+            CAST(SUM(CASE WHEN unit='килограмм' THEN units/1000.0 ELSE units END) AS DECIMAL(38,6)) AS tonnes,
+            MIN(deal_date) AS first_deal_date, MAX(deal_date) AS last_deal_date
+          FROM mass GROUP BY {key} ORDER BY tonnes DESC, {key} LIMIT {limit}
+        """
+        result = await self.database.query(query, [start.isoformat(), end.isoformat(), *states], max_rows=limit)
+        return {"ok": True, "tool": "mass_ranking", "columns": result.columns,
+                "rows": _rows_as_dicts(result.columns, result.rows), "row_count": result.row_count,
+                "truncated": result.truncated, "scope": {"start_date": start.isoformat(),
+                    "end_date": end.isoformat(), "basis": basis, "states": states,
+                    "measure": measure, "grouping": grouping},
+                "note": "Mass units only. kg / 1000 -> tonnes. Other dimensions excluded. sample_label is an example, not the whole commodity definition."}
+
+    async def _region_audit(self, arguments: dict[str, Any]) -> dict[str, Any]:
+        start = _parse_date(str(arguments.get("start_date", "")))
+        end = _parse_date(str(arguments.get("end_date", "")))
+        if start > end:
+            raise ToolError("start_date must not exceed end_date")
+        basis = arguments.get("basis")
+        filters = {
+            "all": "TRUE",
+            "noncancelled": "d.deal_state <> 'Аннулирован(Не оплачен)'",
+            "completed": "d.deal_state IN ('Исполнен','Исполнен(Частично)')",
+        }
+        if not isinstance(basis, str) or basis not in filters:
+            raise ToolError("basis must be all, noncancelled or completed")
+        query = f"""
+          SELECT COUNT(*) AS total_rows,
+            COUNT(c.contract_no) AS joined_contract_rows,
+            COUNT(p.inn) AS joined_seller_rows,
+            COUNT(*) FILTER (WHERE d.region = c.region) AS contract_label_equal_rows,
+            COUNT(*) FILTER (WHERE d.region = p.region) AS seller_label_equal_rows,
+            100.0 * COUNT(c.contract_no) / NULLIF(COUNT(*),0) AS contract_key_join_pct,
+            100.0 * COUNT(p.inn) / NULLIF(COUNT(*),0) AS seller_key_join_pct,
+            100.0 * COUNT(*) FILTER (WHERE d.region=c.region) / NULLIF(COUNT(*),0) AS contract_label_equal_pct,
+            100.0 * COUNT(*) FILTER (WHERE d.region=p.region) / NULLIF(COUNT(*),0) AS seller_label_equal_pct
+          FROM deals d LEFT JOIN contracts c ON c.contract_no=d.contract_no
+          LEFT JOIN participants p ON p.inn=d.seller_inn
+          WHERE d.deal_date >= CAST(? AS DATE) AND d.deal_date <= CAST(? AS DATE)
+            AND {filters[basis]}
+        """
+        result = await self.database.query(query, [start.isoformat(), end.isoformat()], max_rows=1)
+        return {"ok": True, "tool": "region_audit", "columns": result.columns,
+                "rows": _rows_as_dicts(result.columns, result.rows), "row_count": result.row_count,
+                "truncated": False, "scope": {"start_date": start.isoformat(),
+                                                "end_date": end.isoformat(), "basis": basis},
+                "definitions": {"deals.region": "seller-company region",
+                                "contracts.region": "warehouse region",
+                                "participants.region": "company region",
+                                "key_join": "A record was found by contract number or seller INN",
+                                "label_equal": "The region strings are equal; different from key join coverage"}}
 
     # ------------------------------------------------------------------
     # search_products
@@ -631,7 +774,7 @@ TOOLS: list[dict[str, Any]] = [
         "function": {
             "name": "usd_rate",
             "description": (
-                "Return the official USD→UZS rate for one date from usd_rates. "
+                "Return the synthetic dataset USD→UZS rate for one date from usd_rates. "
                 "Date format: DD.MM.YYYY or YYYY-MM-DD. Returns found=false outside the data range."
             ),
             "parameters": {
@@ -648,3 +791,35 @@ TOOLS: list[dict[str, Any]] = [
         },
     },
 ]
+
+
+TOOLS.append({
+    "type": "function", "function": {
+        "name": "region_audit",
+        "description": "Compare regional fields: key-join coverage and exact region-label equality are separate metrics. Use for questions about which region column matches contracts or seller participants. Dates inclusive.",
+        "parameters": {"type": "object", "properties": {
+            "start_date": {"type": "string", "description": "YYYY-MM-DD"},
+            "end_date": {"type": "string", "description": "YYYY-MM-DD"},
+            "basis": {"type": "string", "enum": ["all", "noncancelled", "completed"]}},
+            "required": ["start_date", "end_date", "basis"], "additionalProperties": False}}})
+
+
+TOOLS.append({
+    "type": "function", "function": {
+        "name": "registry_audit",
+        "description": "Audit the full registry across all states: deal number gaps, contracts used/unused by currency, companies trading, seller-broker activity, daily FX coverage and monotonicity, orphan foreign keys, trading days. Computes all inventory checks in one query; prefer over many exploratory queries for a full integrity audit. No turnover amounts.",
+        "parameters": {"type": "object", "properties": {}, "additionalProperties": False}}})
+
+
+TOOLS.append({"type": "function", "function": {
+    "name": "mass_ranking",
+    "description": "Rank comparable mass in tonnes. Groups commodities by TN VED across names/forms, or ranks individual deals. Supports contracted, delivered or remaining quantity; kg are divided by 1000. Litres/pieces/lengths/areas are excluded. For largest partial-delivery backlog use measure=remaining, grouping=deal and states=['Исполнен(Частично)']. sample_label is only an example name.",
+    "parameters": {"type": "object", "properties": {
+        "start_date": {"type": "string"}, "end_date": {"type": "string"},
+        "basis": {"type": "string", "enum": ["all", "noncancelled", "completed"]},
+        "measure": {"type": "string", "enum": ["contracted", "delivered", "remaining"]},
+        "grouping": {"type": "string", "enum": ["commodity", "deal"]},
+        "states": {"type": "array", "items": {"type": "string"}},
+        "limit": {"type": "integer", "minimum": 1, "maximum": 20}},
+        "required": ["start_date", "end_date", "basis", "measure", "grouping"],
+        "additionalProperties": False}}})

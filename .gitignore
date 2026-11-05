@@ -7,3 +7,6 @@ logs/
 data/*.duckdb
 data/*.duckdb.*
 *.log
+
+# Versioned live QA artifacts (may include model traces).
+/qa/runs/

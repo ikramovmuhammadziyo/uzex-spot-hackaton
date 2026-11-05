@@ -1,3 +1,7 @@
 -r requirements.txt
 pytest>=8
 pytest-asyncio>=0.24
+
+# Independent CSV answer-key verification and optional workbook reports
+pandas>=2.2
+openpyxl>=3.1

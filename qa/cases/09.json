@@ -1,0 +1,110 @@
+{
+  "version": 2,
+  "id": "09",
+  "title": "Топ-регион 2024: семантика поля",
+  "original_question": "Какой регион дал наибольший оборот в 2024 году и каковы первые пять? В ответе объясните, какой именно столбец «Регион» вы использовали и почему — регион есть в файле сделок, в карточках контрактов и в справочнике компаний. Можно ли их соединить между собой?",
+  "canonical_question": "Какой регион дал наибольший оборот в 2024 году и каковы первые пять? В ответе объясните, какой именно столбец «Регион» вы использовали и почему — регион есть в файле сделок, в карточках контрактов и в справочнике компаний. Можно ли их соединить между собой? Для этого контрольного прогона используйте все состояния, включая аннулированные; суммы называйте стоимостью зарегистрированных сделок, а не реализованным оборотом. Сохраняйте явно запрошенный фильтр по состоянию для отдельных подвыборок.",
+  "metrics": [
+    {
+      "id": "Q9_toshkent_bn",
+      "label": "Q9_toshkent_bn",
+      "entity": "Toshkent shahri",
+      "period": "2024",
+      "basis": "all",
+      "unit": "bn UZS",
+      "expected": 8832.241,
+      "tolerance": 1.0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q9_toshkent_bn"
+    },
+    {
+      "id": "Q9_toshkent_share",
+      "label": "Q9_toshkent_share",
+      "entity": "Toshkent shahri",
+      "period": "2024",
+      "basis": "all",
+      "unit": "%",
+      "expected": 19.242,
+      "tolerance": 0.02,
+      "required": false,
+      "source": "qa/qa_recompute.py:compute/Q9_toshkent_share"
+    },
+    {
+      "id": "Q9_namangan_bn",
+      "label": "Q9_namangan_bn",
+      "entity": "Namangan viloyati",
+      "period": "2024",
+      "basis": "all",
+      "unit": "bn UZS",
+      "expected": 5125.381,
+      "tolerance": 1.0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q9_namangan_bn"
+    },
+    {
+      "id": "Q9_xorazm_bn",
+      "label": "Q9_xorazm_bn",
+      "entity": "Xorazm viloyati",
+      "period": "2024",
+      "basis": "all",
+      "unit": "bn UZS",
+      "expected": 4460.919,
+      "tolerance": 1.0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q9_xorazm_bn"
+    },
+    {
+      "id": "Q9_sirdaryo_bn",
+      "label": "Q9_sirdaryo_bn",
+      "entity": "Sirdaryo viloyati",
+      "period": "2024",
+      "basis": "all",
+      "unit": "bn UZS",
+      "expected": 4081.738,
+      "tolerance": 1.0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q9_sirdaryo_bn"
+    },
+    {
+      "id": "Q9_toshkent_v_bn",
+      "label": "Q9_toshkent_v_bn",
+      "entity": "Toshkent viloyati",
+      "period": "2024",
+      "basis": "all",
+      "unit": "bn UZS",
+      "expected": 3801.187,
+      "tolerance": 1.0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q9_toshkent_v_bn"
+    },
+    {
+      "id": "Q9_region_match_seller",
+      "label": "Q9_region_match_seller",
+      "entity": "region_match",
+      "period": "2024",
+      "basis": "all",
+      "unit": "%",
+      "expected": 100.0,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q9_region_match_seller"
+    },
+    {
+      "id": "Q9_region_match_contract",
+      "label": "Q9_region_match_contract",
+      "entity": "region_match",
+      "period": "2024",
+      "basis": "all",
+      "unit": "%",
+      "expected": 0.0,
+      "tolerance": 0,
+      "required": true,
+      "source": "qa/qa_recompute.py:compute/Q9_region_match_contract"
+    }
+  ],
+  "semantic_checks": [
+    "Deal region is seller-company region",
+    "Contract region is warehouse",
+    "Join by contract number and INN, not labels"
+  ]
+}
